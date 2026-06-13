@@ -2139,15 +2139,21 @@ export class AssessmentReportComponent implements OnInit {
                   />
                   <mat-icon class="text-slate-500 !text-3xl h-8 w-8">cloud_upload</mat-icon>
                   <p class="text-xs font-bold text-slate-300">Arraste a foto ou clique para escolher</p>
-                  <p class="text-[9px] text-slate-500">Imagens PNG ou JPG suportados</p>
+                  <p class="text-[9px] text-slate-500">JPG, PNG, WEBP, GIF, BMP ou AVIF</p>
                 </div>
+
+                @if (uploadError()) {
+                  <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[11px] text-red-400">
+                    {{ uploadError() }}
+                  </div>
+                }
 
                 @if (previewBase64()) {
                   <div class="space-y-2 p-3 bg-[#1C1C21] rounded-xl border border-white/5">
                     <p class="text-[10px] uppercase font-bold text-slate-500">Previsualização</p>
                     <img [src]="previewBase64()" alt="Upload preview" class="rounded max-h-36 object-cover mx-auto" referrerpolicy="no-referrer" />
                     <div class="flex justify-end gap-2 pt-1 border-t border-white/5">
-                      <button (click)="previewBase64.set('')" class="text-[10px] text-red-400 font-bold">Remover</button>
+                      <button (click)="previewBase64.set(''); uploadError.set('')" class="text-[10px] text-red-400 font-bold">Remover</button>
                     </div>
                   </div>
                 }
@@ -2218,7 +2224,8 @@ export class StudentGalleryComponent implements OnInit {
 
   dragActive = signal(false);
   previewBase64 = signal('');
-  
+  uploadError = signal('');
+
   uploadCategory: 'FRENTE' | 'PERFIL' | 'COSTAS' = 'FRENTE';
   uploadDate = new Date().toISOString().substring(0, 10);
 
@@ -2275,11 +2282,46 @@ export class StudentGalleryComponent implements OnInit {
     }
   }
 
+  // Normaliza QUALQUER imagem decodificável pelo navegador (JPG, PNG, WEBP, GIF,
+  // BMP, AVIF...) para JPEG via canvas: garante exibição, corrige orientação e
+  // reduz o tamanho. Formatos que o navegador não decodifica (HEIC/TIFF) caem no onerror.
   convertToBase64(file: File) {
+    this.uploadError.set('');
+    if (!file.type.startsWith('image/')) {
+      this.uploadError.set('O arquivo selecionado não é uma imagem.');
+      return;
+    }
+    if (typeof document === 'undefined') return;
+
     const reader = new FileReader();
     reader.onload = () => {
-      this.previewBase64.set(reader.result as string);
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1600;
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+        if (width > MAX || height > MAX) {
+          const scale = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { this.previewBase64.set(dataUrl); return; }
+        ctx.fillStyle = '#ffffff';            // evita fundo preto ao achatar PNG transparente
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        this.previewBase64.set(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => {
+        this.uploadError.set('Este formato não é suportado pelo navegador (ex: HEIC/TIFF). Converta para JPG ou PNG.');
+      };
+      img.src = dataUrl;
     };
+    reader.onerror = () => this.uploadError.set('Falha ao ler o arquivo.');
     reader.readAsDataURL(file);
   }
 

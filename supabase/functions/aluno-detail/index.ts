@@ -1,6 +1,8 @@
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getAuthUser } from '../_shared/supabase.ts';
 
+const BUCKET = 'fotos-alunos';
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -34,6 +36,15 @@ Deno.serve(async (req) => {
         .single();
 
       if (error) return errorResponse('Aluno não encontrado', 404);
+
+      // Anexa a URL pública de cada foto (o storage_path sozinho não renderiza)
+      if (aluno?.fotos?.length) {
+        aluno.fotos = aluno.fotos.map((foto: { storage_path: string }) => {
+          const { data: { publicUrl } } = client.storage.from(BUCKET).getPublicUrl(foto.storage_path);
+          return { ...foto, url: publicUrl };
+        });
+      }
+
       return jsonResponse(aluno);
     }
 
