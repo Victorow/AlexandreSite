@@ -8,9 +8,10 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== 'GET') return errorResponse('Method not allowed', 405);
 
-    const { user, client } = await getAuthUser(req);
+    const { client } = await getAuthUser(req);
 
-    const { data, error } = await client.rpc('get_dashboard_stats', { pt_id: user.id });
+    // pt_id é derivado de auth.uid() dentro da função (evita IDOR)
+    const { data, error } = await client.rpc('get_dashboard_stats');
     if (error) throw error;
 
     return jsonResponse(data);

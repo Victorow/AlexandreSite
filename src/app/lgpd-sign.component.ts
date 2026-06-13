@@ -5,11 +5,10 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { SupabaseService } from './supabase.service';
-import { DataService } from './data';
 import {
   LGPD_TERM_TEXT, LGPD_TERM_VERSION,
   extractBase64FromDataUrl, isDataUrlSignatureEmpty,
-  getLgpdStatusLabel, getLgpdStatusColor, formatLgpdDate,
+  formatLgpdDate,
 } from './lgpd-utils';
 import { environment } from '../environments/environment';
 

@@ -1106,7 +1106,7 @@ export class StudentProfileComponent implements OnInit {
             
             <!-- Quick calculator preview box -->
             <div class="text-right text-xs text-slate-400">
-              <p>Massa Corporal Prevista: <strong class="text-slate-200">{{ assessmentForm.get('bioimpedance.weight_kg')?.value || '--' }} kg</strong></p>
+              <p>Massa Corporal Prevista: <strong class="text-slate-200">{{ assessmentForm.get('bioimpedance.weightKg')?.value || '--' }} kg</strong></p>
               <p>Altura: <span class="text-slate-300 font-semibold">{{ std.height_cm }} cm</span></p>
             </div>
           </div>
@@ -1476,7 +1476,7 @@ export class NewAssessmentComponent implements OnInit {
       if (p['id']) {
         this.dataService.getStudent(p['id']).subscribe({
           next: (res) => this.student.set(res),
-          error: () => this.isSubmitting.set(false),
+          error: (err) => console.error('Erro ao carregar aluno:', err),
         });
       }
     });
@@ -1539,6 +1539,7 @@ export class NewAssessmentComponent implements OnInit {
     };
     this.dataService.addAssessment(payload).subscribe({
       next: () => {
+        this.isSubmitting.set(false);
         this.router.navigate(['/alunos', std.id]);
       },
       error: (err) => {
@@ -1966,13 +1967,14 @@ export class AssessmentReportComponent implements OnInit {
     const keys = this.radarKeys();
     const maxVal = 130; // Max perimeter scale context cm
 
+    const c = aval.circunferencias;
     const values = [
-      aval.circunferencias.chest_cm || 90,
-      aval.circunferencias.waist_cm || 80,
-      aval.circunferencias.abdomen_cm || 85,
-      aval.circunferencias.hip_cm || 100,
-      aval.circunferencias.right_arm_flexed_cm || 38,
-      aval.circunferencias.right_thigh_proximal_cm || 55
+      c?.chest_cm ?? 90,
+      c?.waist_cm ?? 80,
+      c?.abdomen_cm ?? 85,
+      c?.hip_cm ?? 100,
+      c?.right_arm_flexed_cm ?? 38,
+      c?.right_thigh_proximal_cm ?? 55
     ];
 
     const points = values.map((val, idx) => {
