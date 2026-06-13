@@ -9,6 +9,39 @@ import { extractBase64FromDataUrl } from './lgpd-utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+// Converte oklch() → rgb() usando o Canvas API do browser (html2canvas não suporta oklch)
+function resolveOklch(color: string): string {
+  if (!color || !color.includes('oklch')) return color;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    return a === 0 ? 'transparent' : `rgb(${r},${g},${b})`;
+  } catch { return color; }
+}
+
+function fixOklchColors(origRoot: Element, clonedRoot: Element): void {
+  const props = [
+    'backgroundColor', 'color',
+    'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'outlineColor', 'caretColor',
+  ] as const;
+  const origEls  = Array.from(origRoot.querySelectorAll('*'))  as HTMLElement[];
+  const clonedEls = Array.from(clonedRoot.querySelectorAll('*')) as HTMLElement[];
+  origEls.forEach((orig, i) => {
+    const cloned = clonedEls[i];
+    if (!cloned?.style) return;
+    const cs = window.getComputedStyle(orig);
+    for (const prop of props) {
+      const val = cs[prop as keyof CSSStyleDeclaration] as string;
+      if (val?.includes('oklch')) cloned.style[prop as any] = resolveOklch(val);
+    }
+  });
+}
+
 // ==========================================
 // AUTH UTILITY — usa Supabase session real
 // ==========================================
@@ -2036,6 +2069,7 @@ export class AssessmentReportComponent implements OnInit {
         backgroundColor: '#0a0a0b',
         logging: false,
         removeContainer: true,
+        onclone: (_doc, clonedEl) => fixOklchColors(reportElement, clonedEl),
       }).then((canvas) => {
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const pageW  = pdf.internal.pageSize.getWidth();
