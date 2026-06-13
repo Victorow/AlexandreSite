@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   pdfFormatNumber,
   pdfFormatDate,
+  pdfShortDate,
   pdfAgeFromBirth,
   pdfGenderLabel,
   pdfVisceralLabel,
+  pdfBoolLabel,
+  pdfText,
+  pdfProtocolLabel,
   pdfDelta,
 } from '../app/pdf-report';
 
@@ -100,6 +104,70 @@ describe('pdfVisceralLabel', () => {
   });
   it('VERY_HIGH → Muito Alto', () => {
     expect(pdfVisceralLabel('VERY_HIGH')).toBe('Muito Alto');
+  });
+});
+
+// =============================================
+// pdfShortDate
+// =============================================
+describe('pdfShortDate', () => {
+  it('YYYY-MM-DD → DD/MM', () => {
+    expect(pdfShortDate('2026-06-13')).toBe('13/06');
+  });
+  it('timestamp ISO → DD/MM', () => {
+    expect(pdfShortDate('2026-01-05T10:00:00Z')).toBe('05/01');
+  });
+  it('vazio/null → —', () => {
+    expect(pdfShortDate('')).toBe('—');
+    expect(pdfShortDate(null)).toBe('—');
+  });
+});
+
+// =============================================
+// pdfBoolLabel
+// =============================================
+describe('pdfBoolLabel', () => {
+  it('true → Sim', () => expect(pdfBoolLabel(true)).toBe('Sim'));
+  it('false → Não', () => expect(pdfBoolLabel(false)).toBe('Não'));
+  it('null/undefined → —', () => {
+    expect(pdfBoolLabel(null)).toBe('—');
+    expect(pdfBoolLabel(undefined)).toBe('—');
+  });
+});
+
+// =============================================
+// pdfText
+// =============================================
+describe('pdfText', () => {
+  it('texto normal é preservado', () => {
+    expect(pdfText('Hipertrofia')).toBe('Hipertrofia');
+  });
+  it('string vazia ou só espaços → —', () => {
+    expect(pdfText('')).toBe('—');
+    expect(pdfText('   ')).toBe('—');
+  });
+  it('null/undefined → —', () => {
+    expect(pdfText(null)).toBe('—');
+    expect(pdfText(undefined)).toBe('—');
+  });
+  it('faz trim nas bordas', () => {
+    expect(pdfText('  Olá  ')).toBe('Olá');
+  });
+});
+
+// =============================================
+// pdfProtocolLabel
+// =============================================
+describe('pdfProtocolLabel', () => {
+  it('7_dobras → nome completo', () => {
+    expect(pdfProtocolLabel('7_dobras')).toContain('7 Dobras');
+  });
+  it('protocolo desconhecido retorna ele mesmo', () => {
+    expect(pdfProtocolLabel('custom')).toBe('custom');
+  });
+  it('null/undefined → —', () => {
+    expect(pdfProtocolLabel(null)).toBe('—');
+    expect(pdfProtocolLabel(undefined)).toBe('—');
   });
 });
 
