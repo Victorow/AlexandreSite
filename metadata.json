@@ -1,0 +1,6 @@
+{
+  "name": "Dashboard Antropométrico",
+  "description": "Sistema completo de avaliação física, antropometria e gestão para Personal Trainer",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
