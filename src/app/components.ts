@@ -1,4 +1,4 @@
-﻿import { Component, inject, OnInit, signal, computed, NgZone, ChangeDetectorRef } from '@angular/core';
+﻿import { Component, inject, OnInit, signal, computed, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
@@ -6,86 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { DataService, Student, StudentSummary, Assessment, DashboardStats } from './data';
 import { SupabaseService } from './supabase.service';
 import { extractBase64FromDataUrl } from './lgpd-utils';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-
-// Tailwind v4 usa funções de cor modernas (oklch/oklab) que o html2canvas
-// não consegue parsear. Estas funções convertem tudo para rgb() antes da captura.
-
-// Converte UMA cor (oklch/oklab/qualquer) → rgb() via Canvas API do browser.
-function colorToRgb(color: string): string {
-  try {
-    const c = document.createElement('canvas');
-    c.width = c.height = 1;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#000';
-    ctx.fillStyle = color;            // browser resolve oklch/oklab nativamente
-    ctx.fillRect(0, 0, 1, 1);
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    return a === 0 ? 'rgba(0,0,0,0)' : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-  } catch { return color; }
-}
-
-// Substitui TODAS as ocorrências de oklch()/oklab() dentro de uma string
-// (cobre gradientes, box-shadow, etc. que podem ter várias cores).
-function replaceModernColors(value: string): string {
-  if (!value || (!value.includes('oklch') && !value.includes('oklab'))) return value;
-  return value.replace(/okl(?:ch|ab)\([^)]*\)/g, (m) => colorToRgb(m));
-}
-
-// Injeta <style> que sobrescreve todas as CSS vars oklch/oklab no :root
-// antes do html2canvas ler os estilos computados.
-function injectOklchFix(): HTMLStyleElement {
-  const overrides: string[] = [];
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      for (const rule of Array.from(sheet.cssRules)) {
-        const text = rule.cssText;
-        if (!text.includes('oklch') && !text.includes('oklab')) continue;
-        const matches = text.matchAll(/(--[\w-]+)\s*:\s*(okl(?:ch|ab)\([^)]+\))/g);
-        for (const [, name, val] of matches) {
-          overrides.push(`${name}:${colorToRgb(val)}`);
-        }
-      }
-    } catch { /* sheet cross-origin, ignorar */ }
-  }
-  const style = document.createElement('style');
-  style.id = '__oklch-pdf-fix';
-  style.textContent = `:root{${overrides.join(';')}}`;
-  document.head.appendChild(style);
-  return style;
-}
-
-// Percorre o DOM clonado e resolve oklch/oklab inline em cada elemento,
-// lendo o estilo computado do elemento original (já com variáveis substituídas).
-function fixClonedColors(origRoot: Element, clonedRoot: Element): void {
-  const COLOR_PROPS = [
-    'color', 'backgroundColor', 'backgroundImage',
-    'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-    'outlineColor', 'boxShadow', 'fill', 'stroke', 'textDecorationColor',
-  ] as const;
-
-  const fix = (orig: Element, cloned: Element) => {
-    const el = cloned as HTMLElement;
-    if (!el.style) return;
-    const cs = window.getComputedStyle(orig);
-    for (const prop of COLOR_PROPS) {
-      const val = cs.getPropertyValue(
-        prop.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
-      );
-      if (val && (val.includes('oklch') || val.includes('oklab'))) {
-        (el.style as any)[prop] = replaceModernColors(val);
-      }
-    }
-  };
-
-  fix(origRoot, clonedRoot);
-  const origEls = origRoot.querySelectorAll('*');
-  const clonedEls = clonedRoot.querySelectorAll('*');
-  for (let i = 0; i < origEls.length; i++) {
-    if (clonedEls[i]) fix(origEls[i], clonedEls[i]);
-  }
-}
+import { generateAssessmentPDF } from './pdf-report';
 
 // ==========================================
 // AUTH UTILITY — usa Supabase session real
@@ -109,6 +30,26 @@ export function getTrainerToken(): string | null {
     return parsed?.access_token ?? parsed?.session?.access_token ?? null;
   } catch {
     return null;
+  }
+}
+
+/** Nome do personal trainer logado (lido da sessão Supabase no localStorage). */
+export function getTrainerName(): string {
+  if (typeof window === 'undefined') return 'Personal Trainer';
+  try {
+    const keys = Object.keys(localStorage);
+    const sessionKey = keys.find(
+      k => (k.startsWith('sb-') && k.endsWith('-auth-token')) ||
+           k.includes('supabase.auth.token')
+    );
+    if (!sessionKey) return 'Personal Trainer';
+    const raw = localStorage.getItem(sessionKey);
+    if (!raw) return 'Personal Trainer';
+    const parsed = JSON.parse(raw);
+    const user = parsed?.user ?? parsed?.session?.user;
+    return user?.user_metadata?.name ?? user?.email?.split('@')[0] ?? 'Personal Trainer';
+  } catch {
+    return 'Personal Trainer';
   }
 }
 
@@ -1964,7 +1905,6 @@ export class NewAssessmentComponent implements OnInit {
 export class AssessmentReportComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private dataService = inject(DataService);
-  private ngZone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
 
   student = signal<Student | null>(null);
@@ -2086,88 +2026,33 @@ export class AssessmentReportComponent implements OnInit {
   }
 
   exportPDF(studentName: string) {
-    if (typeof document === 'undefined') return;
+    const std = this.student();
+    const aval = this.assessment();
+    if (!std || !aval) {
+      alert('Aguarde o carregamento completo da avaliação e tente novamente.');
+      return;
+    }
 
     this.isGeneratingPdf.set(true);
     this.cdr.detectChanges();
 
-    const reportElement = document.getElementById('pdf-report-content');
-    if (!reportElement) {
+    try {
+      const doc = generateAssessmentPDF({
+        student: std,
+        assessment: aval,
+        previous: this.previousAssessment(),
+        trainerName: getTrainerName(),
+        generatedAt: new Date(),
+      });
+      const safeName = studentName.replace(/\s+/g, '_').replace(/[^\w-]/g, '');
+      doc.save(`Avaliacao_Fisica_${safeName}_${aval.date}.pdf`);
+    } catch (err) {
+      console.error('[exportPDF]', err);
+      alert(`Erro ao gerar PDF: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
+    } finally {
       this.isGeneratingPdf.set(false);
       this.cdr.detectChanges();
-      alert('Elemento do relatório não encontrado. Aguarde o carregamento completo e tente novamente.');
-      return;
     }
-
-    const nonPrintNodes = reportElement.querySelectorAll('.no-print-section');
-    const printBrandingNode = reportElement.querySelector('.print-branding');
-
-    nonPrintNodes.forEach(n => (n as HTMLElement).style.display = 'none');
-    if (printBrandingNode) (printBrandingNode as HTMLElement).style.display = 'flex';
-
-    // Injeta overrides rgb para todas as vars oklch do Tailwind v4 antes do html2canvas
-    const oklchFixStyle = injectOklchFix();
-
-    // setTimeout dá tempo ao browser renderizar as mudanças antes do canvas
-    setTimeout(() => {
-      html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#0a0a0b',
-        logging: false,
-        removeContainer: true,
-        onclone: (_doc, clonedEl) => fixClonedColors(reportElement, clonedEl),
-      }).then((canvas) => {
-        oklchFixStyle.remove();
-
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        const pageW  = pdf.internal.pageSize.getWidth();
-        const pageH  = pdf.internal.pageSize.getHeight();
-        const ratio  = canvas.width / canvas.height;
-        const imgH   = pageW / ratio;
-
-        let yOffset = 0;
-        let remaining = imgH;
-
-        while (remaining > 0) {
-          const srcY     = (yOffset / imgH) * canvas.height;
-          const sliceH   = Math.min(remaining, pageH);
-          const srcH     = (sliceH / imgH) * canvas.height;
-
-          const pageCanvas = document.createElement('canvas');
-          pageCanvas.width  = canvas.width;
-          pageCanvas.height = srcH;
-          const ctx = pageCanvas.getContext('2d')!;
-          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
-
-          const pageImg = pageCanvas.toDataURL('image/png');
-          if (yOffset > 0) pdf.addPage();
-          pdf.addImage(pageImg, 'PNG', 0, 0, pageW, sliceH);
-
-          yOffset   += pageH;
-          remaining -= pageH;
-        }
-
-        pdf.save(`Avaliacao_Fisica_${studentName.replace(/\s+/g, '_')}.pdf`);
-        this.ngZone.run(() => {
-          nonPrintNodes.forEach(n => (n as HTMLElement).style.display = '');
-          if (printBrandingNode) (printBrandingNode as HTMLElement).style.display = 'none';
-          this.isGeneratingPdf.set(false);
-          this.cdr.detectChanges();
-        });
-      }).catch((err) => {
-        oklchFixStyle.remove();
-        console.error('[exportPDF]', err);
-        this.ngZone.run(() => {
-          nonPrintNodes.forEach(n => (n as HTMLElement).style.display = '');
-          if (printBrandingNode) (printBrandingNode as HTMLElement).style.display = 'none';
-          this.isGeneratingPdf.set(false);
-          this.cdr.detectChanges();
-          alert(`Erro ao gerar PDF: ${err?.message ?? 'Tente novamente.'}`);
-        });
-      });
-    }, 150);
   }
 }
 
