@@ -9,31 +9,42 @@ import { extractBase64FromDataUrl } from './lgpd-utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// Converte oklch() → rgb() usando o Canvas API (html2canvas não suporta oklch)
-function resolveOklch(color: string): string {
-  if (!color?.includes('oklch')) return color;
+// Tailwind v4 usa funções de cor modernas (oklch/oklab) que o html2canvas
+// não consegue parsear. Estas funções convertem tudo para rgb() antes da captura.
+
+// Converte UMA cor (oklch/oklab/qualquer) → rgb() via Canvas API do browser.
+function colorToRgb(color: string): string {
   try {
     const c = document.createElement('canvas');
     c.width = c.height = 1;
     const ctx = c.getContext('2d')!;
-    ctx.fillStyle = color;
+    ctx.fillStyle = '#000';
+    ctx.fillStyle = color;            // browser resolve oklch/oklab nativamente
     ctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    return a === 0 ? 'transparent' : `rgb(${r},${g},${b})`;
+    return a === 0 ? 'rgba(0,0,0,0)' : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
   } catch { return color; }
 }
 
-// Injeta <style> que sobrescreve todas as CSS vars oklch no :root
+// Substitui TODAS as ocorrências de oklch()/oklab() dentro de uma string
+// (cobre gradientes, box-shadow, etc. que podem ter várias cores).
+function replaceModernColors(value: string): string {
+  if (!value || (!value.includes('oklch') && !value.includes('oklab'))) return value;
+  return value.replace(/okl(?:ch|ab)\([^)]*\)/g, (m) => colorToRgb(m));
+}
+
+// Injeta <style> que sobrescreve todas as CSS vars oklch/oklab no :root
 // antes do html2canvas ler os estilos computados.
 function injectOklchFix(): HTMLStyleElement {
   const overrides: string[] = [];
   for (const sheet of Array.from(document.styleSheets)) {
     try {
       for (const rule of Array.from(sheet.cssRules)) {
-        if (!rule.cssText.includes('oklch')) continue;
-        const matches = rule.cssText.matchAll(/(--[\w-]+)\s*:\s*(oklch\([^)]+\))/g);
+        const text = rule.cssText;
+        if (!text.includes('oklch') && !text.includes('oklab')) continue;
+        const matches = text.matchAll(/(--[\w-]+)\s*:\s*(okl(?:ch|ab)\([^)]+\))/g);
         for (const [, name, val] of matches) {
-          overrides.push(`${name}:${resolveOklch(val)}`);
+          overrides.push(`${name}:${colorToRgb(val)}`);
         }
       }
     } catch { /* sheet cross-origin, ignorar */ }
@@ -43,6 +54,37 @@ function injectOklchFix(): HTMLStyleElement {
   style.textContent = `:root{${overrides.join(';')}}`;
   document.head.appendChild(style);
   return style;
+}
+
+// Percorre o DOM clonado e resolve oklch/oklab inline em cada elemento,
+// lendo o estilo computado do elemento original (já com variáveis substituídas).
+function fixClonedColors(origRoot: Element, clonedRoot: Element): void {
+  const COLOR_PROPS = [
+    'color', 'backgroundColor', 'backgroundImage',
+    'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'outlineColor', 'boxShadow', 'fill', 'stroke', 'textDecorationColor',
+  ] as const;
+
+  const fix = (orig: Element, cloned: Element) => {
+    const el = cloned as HTMLElement;
+    if (!el.style) return;
+    const cs = window.getComputedStyle(orig);
+    for (const prop of COLOR_PROPS) {
+      const val = cs.getPropertyValue(
+        prop.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
+      );
+      if (val && (val.includes('oklch') || val.includes('oklab'))) {
+        (el.style as any)[prop] = replaceModernColors(val);
+      }
+    }
+  };
+
+  fix(origRoot, clonedRoot);
+  const origEls = origRoot.querySelectorAll('*');
+  const clonedEls = clonedRoot.querySelectorAll('*');
+  for (let i = 0; i < origEls.length; i++) {
+    if (clonedEls[i]) fix(origEls[i], clonedEls[i]);
+  }
 }
 
 // ==========================================
@@ -2075,6 +2117,7 @@ export class AssessmentReportComponent implements OnInit {
         backgroundColor: '#0a0a0b',
         logging: false,
         removeContainer: true,
+        onclone: (_doc, clonedEl) => fixClonedColors(reportElement, clonedEl),
       }).then((canvas) => {
         oklchFixStyle.remove();
 
