@@ -9,9 +9,9 @@ import { extractBase64FromDataUrl } from './lgpd-utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// Converte oklch() → rgb() usando o Canvas API do browser (html2canvas não suporta oklch)
+// Converte oklch() → rgb() usando o Canvas API (html2canvas não suporta oklch)
 function resolveOklch(color: string): string {
-  if (!color || !color.includes('oklch')) return color;
+  if (!color?.includes('oklch')) return color;
   try {
     const c = document.createElement('canvas');
     c.width = c.height = 1;
@@ -23,23 +23,26 @@ function resolveOklch(color: string): string {
   } catch { return color; }
 }
 
-function fixOklchColors(origRoot: Element, clonedRoot: Element): void {
-  const props = [
-    'backgroundColor', 'color',
-    'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-    'outlineColor', 'caretColor',
-  ] as const;
-  const origEls  = Array.from(origRoot.querySelectorAll('*'))  as HTMLElement[];
-  const clonedEls = Array.from(clonedRoot.querySelectorAll('*')) as HTMLElement[];
-  origEls.forEach((orig, i) => {
-    const cloned = clonedEls[i];
-    if (!cloned?.style) return;
-    const cs = window.getComputedStyle(orig);
-    for (const prop of props) {
-      const val = cs[prop as keyof CSSStyleDeclaration] as string;
-      if (val?.includes('oklch')) cloned.style[prop as any] = resolveOklch(val);
-    }
-  });
+// Injeta <style> que sobrescreve todas as CSS vars oklch no :root
+// antes do html2canvas ler os estilos computados.
+function injectOklchFix(): HTMLStyleElement {
+  const overrides: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (!rule.cssText.includes('oklch')) continue;
+        const matches = rule.cssText.matchAll(/(--[\w-]+)\s*:\s*(oklch\([^)]+\))/g);
+        for (const [, name, val] of matches) {
+          overrides.push(`${name}:${resolveOklch(val)}`);
+        }
+      }
+    } catch { /* sheet cross-origin, ignorar */ }
+  }
+  const style = document.createElement('style');
+  style.id = '__oklch-pdf-fix';
+  style.textContent = `:root{${overrides.join(';')}}`;
+  document.head.appendChild(style);
+  return style;
 }
 
 // ==========================================
@@ -2060,6 +2063,9 @@ export class AssessmentReportComponent implements OnInit {
     nonPrintNodes.forEach(n => (n as HTMLElement).style.display = 'none');
     if (printBrandingNode) (printBrandingNode as HTMLElement).style.display = 'flex';
 
+    // Injeta overrides rgb para todas as vars oklch do Tailwind v4 antes do html2canvas
+    const oklchFixStyle = injectOklchFix();
+
     // setTimeout dá tempo ao browser renderizar as mudanças antes do canvas
     setTimeout(() => {
       html2canvas(reportElement, {
@@ -2069,25 +2075,23 @@ export class AssessmentReportComponent implements OnInit {
         backgroundColor: '#0a0a0b',
         logging: false,
         removeContainer: true,
-        onclone: (_doc, clonedEl) => fixOklchColors(reportElement, clonedEl),
       }).then((canvas) => {
+        oklchFixStyle.remove();
+
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const pageW  = pdf.internal.pageSize.getWidth();
         const pageH  = pdf.internal.pageSize.getHeight();
         const ratio  = canvas.width / canvas.height;
-        const imgH   = pageW / ratio;          // altura proporcional em mm
+        const imgH   = pageW / ratio;
 
-        // Paginação: divide a imagem em fatias de pageH
         let yOffset = 0;
         let remaining = imgH;
 
         while (remaining > 0) {
-          // srcY em pixels correspondente ao yOffset em mm
           const srcY     = (yOffset / imgH) * canvas.height;
           const sliceH   = Math.min(remaining, pageH);
           const srcH     = (sliceH / imgH) * canvas.height;
 
-          // Cria um canvas parcial para cada página
           const pageCanvas = document.createElement('canvas');
           pageCanvas.width  = canvas.width;
           pageCanvas.height = srcH;
@@ -2110,6 +2114,7 @@ export class AssessmentReportComponent implements OnInit {
           this.cdr.detectChanges();
         });
       }).catch((err) => {
+        oklchFixStyle.remove();
         console.error('[exportPDF]', err);
         this.ngZone.run(() => {
           nonPrintNodes.forEach(n => (n as HTMLElement).style.display = '');
