@@ -7,6 +7,7 @@ import { DataService, Student, StudentSummary, Assessment, DashboardStats } from
 import { SupabaseService } from './supabase.service';
 import { extractBase64FromDataUrl } from './lgpd-utils';
 import { generateAssessmentPDF } from './pdf-report';
+import { ToastService } from './toast.service';
 
 // ==========================================
 // AUTH UTILITY — usa Supabase session real
@@ -683,16 +684,13 @@ export class StudentsListComponent implements OnInit {
 
           <div class="flex items-center justify-between p-3 bg-[#1C1C21] rounded-xl border border-dashed border-white/5">
             <div>
-              <p class="text-xs font-bold text-white">Disparar Termo LGPD para Aceite</p>
-              <p class="text-[10px] text-slate-400">Assinalar como "Permitido" caso o aluno já tenha aceitado presencialmente.</p>
+              <p class="text-xs font-bold text-white">Consentimento LGPD</p>
+              <p class="text-[10px] text-slate-400">O aceite é registrado somente pela assinatura digital do aluno, feita no perfil dele.</p>
             </div>
-            <select 
-              formControlName="lgpdConsentStatus"
-              class="px-3 py-1.5 bg-[#141417] border border-white/5 rounded-lg text-xs text-white"
-            >
-              <option value="ACCEPTED">Permitido (Aceito presencial)</option>
-              <option value="PENDING">Pendente (Disparar Termo)</option>
-            </select>
+            <span class="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              Pendente
+            </span>
           </div>
         </div>
 
@@ -739,7 +737,7 @@ export class NewStudentComponent {
     heightCm: ['', [Validators.required, Validators.min(50), Validators.max(250)]],
     goal: [''],
     phoneNumber: [''],
-    lgpdConsentStatus: ['ACCEPTED'],
+    lgpdConsentStatus: ['PENDING'],
     anamnesis: this.fb.group({
       cardiacCondition: [false],
       jointPain: [false],
@@ -1061,8 +1059,8 @@ export class StudentProfileComponent implements OnInit {
       <!-- Top Title and student label -->
       @if (student(); as std) {
         <div>
-          <h1 class="text-2xl font-extrabold tracking-tight text-white font-sans">Nova Avaliação Física</h1>
-          <p class="text-xs text-slate-400">Registrar medições para o aluno <strong class="text-blue-400">{{ std.name }}</strong></p>
+          <h1 class="text-2xl font-extrabold tracking-tight text-white font-sans">{{ isEditMode() ? 'Editar Avaliação Física' : 'Nova Avaliação Física' }}</h1>
+          <p class="text-xs text-slate-400">{{ isEditMode() ? 'Editando avaliação de' : 'Registrar medições para o aluno' }} <strong class="text-blue-400">{{ std.name }}</strong></p>
         </div>
 
         <!-- Progress Tracker Bar -->
@@ -1328,39 +1326,39 @@ export class StudentProfileComponent implements OnInit {
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tríceps</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="tricepsMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="tricepsMm" (blur)="maybeConvertSkinfold('tricepsMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Bíceps</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="bicepsMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="bicepsMm" (blur)="maybeConvertSkinfold('bicepsMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Subescapular</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="subscapularMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="subscapularMm" (blur)="maybeConvertSkinfold('subscapularMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Peitoral</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="chestMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="chestMm" (blur)="maybeConvertSkinfold('chestMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Axilar Média</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="midaxillaryMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="midaxillaryMm" (blur)="maybeConvertSkinfold('midaxillaryMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block block">Supra-ilíaca</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="suprailiacMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="suprailiacMm" (blur)="maybeConvertSkinfold('suprailiacMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block block">Abdominal</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="abdominalMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="abdominalMm" (blur)="maybeConvertSkinfold('abdominalMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block block">Coxa Média</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="midThighMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="midThighMm" (blur)="maybeConvertSkinfold('midThighMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block block">Panturrilha Média</label>
-                  <input type="number" step="0.1" inputMode="decimal" formControlName="calfMm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  <input type="number" step="0.1" inputMode="decimal" formControlName="calfMm" (blur)="maybeConvertSkinfold('calfMm')" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
               </div>
             </div>
@@ -1403,7 +1401,7 @@ export class StudentProfileComponent implements OnInit {
                     <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     Calculando...
                   } @else {
-                    Concluir Avaliação
+                    {{ isEditMode() ? 'Salvar Alterações' : 'Concluir Avaliação' }}
                   }
                 </button>
               }
@@ -1419,10 +1417,13 @@ export class NewAssessmentComponent implements OnInit {
   private dataService = inject(DataService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private toast = inject(ToastService);
 
   student = signal<Student | null>(null);
   activeStep = signal(1);
   isSubmitting = signal(false);
+  isEditMode = signal(false);
+  editAssessmentId = signal<string | null>(null);
 
   // Formulário completo
   assessmentForm: FormGroup = this.fb.group({
@@ -1432,59 +1433,103 @@ export class NewAssessmentComponent implements OnInit {
       isAthlete: [false],                 // Omron: modo atleta
       weightKg: ['', [Validators.required, Validators.min(1)]],
       bmi: [''],                          // opcional — API calcula automaticamente
-      bodyFatPercentage: ['', [Validators.required]],
-      skeletalMusclePercentage: ['', [Validators.required]],
-      restingMetabolismKcal: ['', [Validators.required]],
-      bodyAge: ['', [Validators.required]],
+      bodyFatPercentage: ['', [Validators.required, Validators.min(0.1), Validators.max(80)]],
+      skeletalMusclePercentage: ['', [Validators.required, Validators.min(0.1), Validators.max(80)]],
+      restingMetabolismKcal: ['', [Validators.required, Validators.min(1)]],
+      bodyAge: ['', [Validators.required, Validators.min(10), Validators.max(100)]],
       visceralFatLevel: ['', [Validators.required, Validators.min(1), Validators.max(30)]],
       waterPercentage: [''],              // % água corporal (Omron)
     }),
     circumferences: this.fb.group({
-      neckCm: ['', [Validators.required]],
-      shoulderCm: ['', [Validators.required]],
-      chestCm: ['', [Validators.required]],
-      waistCm: ['', [Validators.required]],
-      abdomenCm: ['', [Validators.required]],
-      hipCm: ['', [Validators.required]],
-      rightArmRelaxedCm: ['', [Validators.required]],
-      leftArmRelaxedCm: ['', [Validators.required]],
-      rightArmFlexedCm: ['', [Validators.required]],
-      leftArmFlexedCm: ['', [Validators.required]],
-      rightForearmCm: [''],              // Antebraço D (opcional)
-      leftForearmCm: [''],               // Antebraço E (opcional)
-      rightThighProximalCm: ['', [Validators.required]],
-      leftThighProximalCm: ['', [Validators.required]],
-      rightCalfCm: ['', [Validators.required]],
-      leftCalfCm: ['', [Validators.required]]
+      neckCm: ['', [Validators.required, Validators.min(0.1)]],
+      shoulderCm: ['', [Validators.required, Validators.min(0.1)]],
+      chestCm: ['', [Validators.required, Validators.min(0.1)]],
+      waistCm: ['', [Validators.required, Validators.min(0.1)]],
+      abdomenCm: ['', [Validators.required, Validators.min(0.1)]],
+      hipCm: ['', [Validators.required, Validators.min(0.1)]],
+      rightArmRelaxedCm: ['', [Validators.required, Validators.min(0.1)]],
+      leftArmRelaxedCm: ['', [Validators.required, Validators.min(0.1)]],
+      rightArmFlexedCm: ['', [Validators.required, Validators.min(0.1)]],
+      leftArmFlexedCm: ['', [Validators.required, Validators.min(0.1)]],
+      rightForearmCm: ['', [Validators.min(0.1)]],   // Antebraço D (opcional)
+      leftForearmCm: ['', [Validators.min(0.1)]],    // Antebraço E (opcional)
+      rightThighProximalCm: ['', [Validators.required, Validators.min(0.1)]],
+      leftThighProximalCm: ['', [Validators.required, Validators.min(0.1)]],
+      rightCalfCm: ['', [Validators.required, Validators.min(0.1)]],
+      leftCalfCm: ['', [Validators.required, Validators.min(0.1)]]
     }),
     skinfolds: this.fb.group({
       protocol: ['7_dobras'],            // protocolo de dobras
-      tricepsMm: ['', [Validators.required]],
-      bicepsMm: ['', [Validators.required]],
-      subscapularMm: ['', [Validators.required]],
-      chestMm: ['', [Validators.required]],
-      midaxillaryMm: ['', [Validators.required]],
-      suprailiacMm: ['', [Validators.required]],
-      abdominalMm: ['', [Validators.required]],
-      midThighMm: ['', [Validators.required]],
-      calfMm: ['', [Validators.required]]
+      tricepsMm: ['', [Validators.required, Validators.min(0.1)]],
+      bicepsMm: ['', [Validators.required, Validators.min(0.1)]],
+      subscapularMm: ['', [Validators.required, Validators.min(0.1)]],
+      chestMm: ['', [Validators.required, Validators.min(0.1)]],
+      midaxillaryMm: ['', [Validators.required, Validators.min(0.1)]],
+      suprailiacMm: ['', [Validators.required, Validators.min(0.1)]],
+      abdominalMm: ['', [Validators.required, Validators.min(0.1)]],
+      midThighMm: ['', [Validators.required, Validators.min(0.1)]],
+      calfMm: ['', [Validators.required, Validators.min(0.1)]]
     })
   });
 
   ngOnInit() {
     this.route.params.subscribe(p => {
+      const editId = p['id_aval'] ?? null;
+      this.editAssessmentId.set(editId);
+      this.isEditMode.set(!!editId);
       if (p['id']) {
         this.dataService.getStudent(p['id']).subscribe({
-          next: (res) => this.student.set(res),
+          next: (res) => {
+            this.student.set(res);
+            if (editId) this.prefillForEdit(res, editId);
+          },
           error: (err) => console.error('Erro ao carregar aluno:', err),
         });
       }
     });
   }
 
+  private prefillForEdit(std: Student, assessmentId: string) {
+    const aval = std.avaliacoes.find(a => a.id === assessmentId);
+    if (!aval) {
+      this.toast.error('Avaliação não encontrada para edição.');
+      return;
+    }
+    const b = aval.bioimpedancias, c = aval.circunferencias, s = aval.dobras_cutaneas;
+    this.assessmentForm.patchValue({
+      date: aval.date,
+      bioimpedance: {
+        perfilBioimpedancia: b?.perfil_bioimpedancia ?? '',
+        isAthlete: b?.is_athlete ?? false,
+        weightKg: b?.weight_kg ?? '',
+        bodyFatPercentage: b?.body_fat_percentage ?? '',
+        skeletalMusclePercentage: b?.skeletal_muscle_percentage ?? '',
+        restingMetabolismKcal: b?.resting_metabolism_kcal ?? '',
+        bodyAge: b?.body_age ?? '',
+        visceralFatLevel: b?.visceral_fat_level ?? '',
+        waterPercentage: b?.water_percentage ?? '',
+      },
+      circumferences: {
+        neckCm: c?.neck_cm ?? '', shoulderCm: c?.shoulder_cm ?? '', chestCm: c?.chest_cm ?? '',
+        waistCm: c?.waist_cm ?? '', abdomenCm: c?.abdomen_cm ?? '', hipCm: c?.hip_cm ?? '',
+        rightArmRelaxedCm: c?.right_arm_relaxed_cm ?? '', leftArmRelaxedCm: c?.left_arm_relaxed_cm ?? '',
+        rightArmFlexedCm: c?.right_arm_flexed_cm ?? '', leftArmFlexedCm: c?.left_arm_flexed_cm ?? '',
+        rightForearmCm: c?.right_forearm_cm ?? '', leftForearmCm: c?.left_forearm_cm ?? '',
+        rightThighProximalCm: c?.right_thigh_proximal_cm ?? '', leftThighProximalCm: c?.left_thigh_proximal_cm ?? '',
+        rightCalfCm: c?.right_calf_cm ?? '', leftCalfCm: c?.left_calf_cm ?? '',
+      },
+      skinfolds: {
+        protocol: s?.protocol ?? '7_dobras',
+        tricepsMm: s?.triceps_mm ?? '', bicepsMm: s?.biceps_mm ?? '', subscapularMm: s?.subscapular_mm ?? '',
+        chestMm: s?.chest_mm ?? '', midaxillaryMm: s?.midaxillary_mm ?? '', suprailiacMm: s?.suprailiac_mm ?? '',
+        abdominalMm: s?.abdominal_mm ?? '', midThighMm: s?.mid_thigh_mm ?? '', calfMm: s?.calf_mm ?? '',
+      },
+    });
+  }
+
   onSubmit() {
     if (this.assessmentForm.invalid) {
-      alert('Por favor, preencha todos os campos obrigatórios nos 3 passos correspondentes antes de finalizar.');
+      this.toast.warning('Preencha todos os campos obrigatórios (medidas devem ser maiores que zero) nos 3 passos antes de finalizar.');
       return;
     }
     const std = this.student();
@@ -1492,62 +1537,79 @@ export class NewAssessmentComponent implements OnInit {
 
     this.isSubmitting.set(true);
     const v = this.assessmentForm.value;
-    const payload = {
-      aluno_id: std.id,
-      date: v.date,
-      bioimpedance: {
-        weight_kg: +v.bioimpedance.weightKg,
-        body_fat_percentage: +v.bioimpedance.bodyFatPercentage,
-        skeletal_muscle_percentage: +v.bioimpedance.skeletalMusclePercentage,
-        resting_metabolism_kcal: +v.bioimpedance.restingMetabolismKcal,
-        body_age: +v.bioimpedance.bodyAge,
-        visceral_fat_level: +v.bioimpedance.visceralFatLevel,
-        water_percentage: v.bioimpedance.waterPercentage ? +v.bioimpedance.waterPercentage : undefined,
-        perfil_bioimpedancia: v.bioimpedance.perfilBioimpedancia ? +v.bioimpedance.perfilBioimpedancia : undefined,
-        is_athlete: !!v.bioimpedance.isAthlete,
-      },
-      circumferences: {
-        neck_cm: +v.circumferences.neckCm,
-        shoulder_cm: +v.circumferences.shoulderCm,
-        chest_cm: +v.circumferences.chestCm,
-        waist_cm: +v.circumferences.waistCm,
-        abdomen_cm: +v.circumferences.abdomenCm,
-        hip_cm: +v.circumferences.hipCm,
-        right_arm_relaxed_cm: +v.circumferences.rightArmRelaxedCm,
-        left_arm_relaxed_cm: +v.circumferences.leftArmRelaxedCm,
-        right_arm_flexed_cm: +v.circumferences.rightArmFlexedCm,
-        left_arm_flexed_cm: +v.circumferences.leftArmFlexedCm,
-        right_forearm_cm: v.circumferences.rightForearmCm ? +v.circumferences.rightForearmCm : undefined,
-        left_forearm_cm: v.circumferences.leftForearmCm ? +v.circumferences.leftForearmCm : undefined,
-        right_thigh_proximal_cm: +v.circumferences.rightThighProximalCm,
-        left_thigh_proximal_cm: +v.circumferences.leftThighProximalCm,
-        right_calf_cm: +v.circumferences.rightCalfCm,
-        left_calf_cm: +v.circumferences.leftCalfCm,
-      },
-      skinfolds: {
-        protocol: v.skinfolds.protocol ?? '7_dobras',
-        triceps_mm: +v.skinfolds.tricepsMm,
-        biceps_mm: +v.skinfolds.bicepsMm,
-        subscapular_mm: +v.skinfolds.subscapularMm,
-        chest_mm: +v.skinfolds.chestMm,
-        midaxillary_mm: +v.skinfolds.midaxillaryMm,
-        suprailiac_mm: +v.skinfolds.suprailiacMm,
-        abdominal_mm: +v.skinfolds.abdominalMm,
-        mid_thigh_mm: +v.skinfolds.midThighMm,
-        calf_mm: +v.skinfolds.calfMm,
-      },
+    const bioimpedance = {
+      weight_kg: +v.bioimpedance.weightKg,
+      body_fat_percentage: +v.bioimpedance.bodyFatPercentage,
+      skeletal_muscle_percentage: +v.bioimpedance.skeletalMusclePercentage,
+      resting_metabolism_kcal: +v.bioimpedance.restingMetabolismKcal,
+      body_age: +v.bioimpedance.bodyAge,
+      visceral_fat_level: +v.bioimpedance.visceralFatLevel,
+      water_percentage: v.bioimpedance.waterPercentage ? +v.bioimpedance.waterPercentage : undefined,
+      perfil_bioimpedancia: v.bioimpedance.perfilBioimpedancia ? +v.bioimpedance.perfilBioimpedancia : undefined,
+      is_athlete: !!v.bioimpedance.isAthlete,
     };
-    this.dataService.addAssessment(payload).subscribe({
+    const circumferences = {
+      neck_cm: +v.circumferences.neckCm,
+      shoulder_cm: +v.circumferences.shoulderCm,
+      chest_cm: +v.circumferences.chestCm,
+      waist_cm: +v.circumferences.waistCm,
+      abdomen_cm: +v.circumferences.abdomenCm,
+      hip_cm: +v.circumferences.hipCm,
+      right_arm_relaxed_cm: +v.circumferences.rightArmRelaxedCm,
+      left_arm_relaxed_cm: +v.circumferences.leftArmRelaxedCm,
+      right_arm_flexed_cm: +v.circumferences.rightArmFlexedCm,
+      left_arm_flexed_cm: +v.circumferences.leftArmFlexedCm,
+      right_forearm_cm: v.circumferences.rightForearmCm ? +v.circumferences.rightForearmCm : undefined,
+      left_forearm_cm: v.circumferences.leftForearmCm ? +v.circumferences.leftForearmCm : undefined,
+      right_thigh_proximal_cm: +v.circumferences.rightThighProximalCm,
+      left_thigh_proximal_cm: +v.circumferences.leftThighProximalCm,
+      right_calf_cm: +v.circumferences.rightCalfCm,
+      left_calf_cm: +v.circumferences.leftCalfCm,
+    };
+    const skinfolds = {
+      protocol: v.skinfolds.protocol ?? '7_dobras',
+      triceps_mm: +v.skinfolds.tricepsMm,
+      biceps_mm: +v.skinfolds.bicepsMm,
+      subscapular_mm: +v.skinfolds.subscapularMm,
+      chest_mm: +v.skinfolds.chestMm,
+      midaxillary_mm: +v.skinfolds.midaxillaryMm,
+      suprailiac_mm: +v.skinfolds.suprailiacMm,
+      abdominal_mm: +v.skinfolds.abdominalMm,
+      mid_thigh_mm: +v.skinfolds.midThighMm,
+      calf_mm: +v.skinfolds.calfMm,
+    };
+
+    const editId = this.editAssessmentId();
+    const request$ = editId
+      ? this.dataService.updateAssessment({ avaliacao_id: editId, date: v.date, bioimpedance, circumferences, skinfolds })
+      : this.dataService.addAssessment({ aluno_id: std.id, date: v.date, bioimpedance, circumferences, skinfolds });
+
+    request$.subscribe({
       next: () => {
         this.isSubmitting.set(false);
+        this.toast.success(editId ? 'Avaliação atualizada com sucesso!' : 'Avaliação salva com sucesso!');
         this.router.navigate(['/alunos', std.id]);
       },
       error: (err) => {
         console.error(err);
-        alert('Erro ao guardar a avaliação.');
         this.isSubmitting.set(false);
+        this.toast.error(err?.message ?? 'Erro ao guardar a avaliação.');
       }
     });
+  }
+
+  // Auto-conversão CM → MM para dobras cutâneas (valores < 6 quase sempre são cm)
+  maybeConvertSkinfold(controlName: string) {
+    const ctrl = (this.assessmentForm.get('skinfolds') as FormGroup)?.get(controlName);
+    if (!ctrl) return;
+    const raw = ctrl.value;
+    const num = parseFloat(raw);
+    if (!Number.isFinite(num) || num <= 0) return;
+    if (num > 0 && num < 6) {
+      const mm = Math.round(num * 10 * 10) / 10;
+      ctrl.setValue(mm);
+      this.toast.info(`Medida ${num} cm convertida para ${mm} mm.`);
+    }
   }
 }
 
@@ -1591,7 +1653,14 @@ export class NewAssessmentComponent implements OnInit {
                   <mat-icon class="!text-sm text-emerald-400">phone</mat-icon>
                   Enviar WhatsApp
                 </button>
-                <button 
+                <a
+                  [routerLink]="['/alunos', std.id, 'avaliacoes', current.id, 'editar']"
+                  class="px-3.5 py-2 bg-[#1C1C21] hover:bg-[#25252B] border border-white/10 rounded-xl text-xs font-bold text-slate-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <mat-icon class="!text-sm text-amber-400">edit</mat-icon>
+                  Editar
+                </a>
+                <button
                   (click)="exportPDF(std.name)"
                   [disabled]="isGeneratingPdf()"
                   class="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-650 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/10"
@@ -1918,7 +1987,7 @@ export class AssessmentReportComponent implements OnInit {
     const cur = this.assessment();
     const prev = this.previousAssessment();
     if (!cur || !prev) return 0;
-    return cur.bioimpedancias.weight_kg - prev.bioimpedancias.weight_kg;
+    return (cur.bioimpedancias?.weight_kg ?? 0) - (prev.bioimpedancias?.weight_kg ?? 0);
   });
 
   radarKeys = signal(['TÓRAX', 'CINTURA', 'ABDOMEN', 'QUADRIL', 'BRAÇO R.', 'COXA R.']);
@@ -2002,13 +2071,15 @@ export class AssessmentReportComponent implements OnInit {
     return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
   }
 
-  getSimetriaValue(right: number, left: number): string {
+  getSimetriaValue(right: number | null | undefined, left: number | null | undefined): string {
+    if (right == null || left == null) return '—';
     const diff = Math.abs(right - left);
     if (diff === 0) return 'Simétrico';
     return `${right > left ? 'Dir. +' : 'Esq. +'}${diff.toFixed(1)} cm`;
   }
 
-  getSimetriaColor(right: number, left: number): string {
+  getSimetriaColor(right: number | null | undefined, left: number | null | undefined): string {
+    if (right == null || left == null) return 'text-slate-500';
     const diff = Math.abs(right - left);
     if (diff <= 0.5) return 'text-emerald-450 font-semibold';
     if (diff <= 1.5) return 'text-slate-300';
@@ -2017,7 +2088,7 @@ export class AssessmentReportComponent implements OnInit {
 
   sendWhatsApp(std: Student, cur: Assessment) {
     const phone = std.phone_number ? std.phone_number.replace(/\D/g, '') : '';
-    const textMessage = `Olá ${std.name}, sua nova avaliação está pronta! Resumo: Peso: ${cur.bioimpedancias.weight_kg}kg, Gordura: ${cur.body_fat_percentage}%. Veja mais detalhes na nossa plataforma.`;
+    const textMessage = `Olá ${std.name}, sua nova avaliação está pronta! Resumo: Peso: ${cur.bioimpedancias?.weight_kg ?? '—'}kg, Gordura: ${cur.body_fat_percentage}%. Veja mais detalhes na nossa plataforma.`;
     const encodedText = encodeURIComponent(textMessage);
     
     // Redirect via browser window

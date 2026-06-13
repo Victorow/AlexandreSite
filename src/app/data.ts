@@ -153,6 +153,14 @@ export interface CreateAssessmentPayload {
   skinfolds: Omit<Skinfolds, 'sum_mm' | 'fat_percentage'>;
 }
 
+export interface UpdateAssessmentPayload {
+  avaliacao_id: string;
+  date?: string;
+  bioimpedance: Omit<Bioimpedance, 'bmi' | 'fat_mass_kg' | 'lean_mass_kg'>;
+  circumferences: Omit<Circumferences, 'rcq'>;
+  skinfolds: Omit<Skinfolds, 'sum_mm' | 'fat_percentage'>;
+}
+
 // =============================================
 // SERVICE
 // =============================================
@@ -188,6 +196,10 @@ export class DataService {
 
   addAssessment(payload: CreateAssessmentPayload): Observable<Assessment> {
     return from(this.supa.callFunction<Assessment>('avaliacoes', payload, 'POST'));
+  }
+
+  updateAssessment(payload: UpdateAssessmentPayload): Observable<Assessment> {
+    return from(this.supa.callFunction<Assessment>('avaliacoes', payload, 'PUT'));
   }
 
   deleteAssessment(avaliacaoId: string): Observable<{ success: boolean }> {

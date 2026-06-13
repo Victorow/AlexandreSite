@@ -5,11 +5,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { filter } from 'rxjs';
 import { getTrainerToken } from './components';
 import { SupabaseService } from './supabase.service';
+import { ToastComponent } from './toast.component';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, MatIconModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, MatIconModule, ToastComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
