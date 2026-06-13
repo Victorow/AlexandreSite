@@ -56,9 +56,9 @@ Deno.serve(async (req) => {
 
       if (fotoErr) throw fotoErr;
 
-      // Return public URL
-      const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(storagePath);
-      return jsonResponse({ ...foto, url: publicUrl }, 201);
+      // Bucket privado (LGPD): retorna URL assinada temporária
+      const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(storagePath, 3600);
+      return jsonResponse({ ...foto, url: signed?.signedUrl ?? null }, 201);
     }
 
     if (req.method === 'DELETE') {

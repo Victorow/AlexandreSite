@@ -37,12 +37,17 @@ Deno.serve(async (req) => {
 
       if (error) return errorResponse('Aluno não encontrado', 404);
 
-      // Anexa a URL pública de cada foto (o storage_path sozinho não renderiza)
+      // Bucket privado (LGPD): gera URL assinada temporária para cada foto.
       if (aluno?.fotos?.length) {
-        aluno.fotos = aluno.fotos.map((foto: { storage_path: string }) => {
-          const { data: { publicUrl } } = client.storage.from(BUCKET).getPublicUrl(foto.storage_path);
-          return { ...foto, url: publicUrl };
-        });
+        const paths = aluno.fotos.map((f: { storage_path: string }) => f.storage_path);
+        const { data: signed } = await client.storage.from(BUCKET).createSignedUrls(paths, 3600);
+        const urlByPath = new Map<string, string>(
+          (signed ?? []).map((s: { path: string | null; signedUrl: string }) => [s.path ?? '', s.signedUrl]),
+        );
+        aluno.fotos = aluno.fotos.map((foto: { storage_path: string }) => ({
+          ...foto,
+          url: urlByPath.get(foto.storage_path) ?? null,
+        }));
       }
 
       return jsonResponse(aluno);
