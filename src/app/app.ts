@@ -6,17 +6,20 @@ import { filter } from 'rxjs';
 import { getTrainerToken } from './components';
 import { SupabaseService } from './supabase.service';
 import { ToastComponent } from './toast.component';
+import { DialogComponent } from './dialog.component';
+import { DialogService } from './dialog.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, MatIconModule, ToastComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule, MatIconModule, ToastComponent, DialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App implements OnInit {
   private router = inject(Router);
   private supa = inject(SupabaseService);
+  private dialog = inject(DialogService);
 
   isLoginPage = signal(true);
   currentPath = signal('');
@@ -59,7 +62,13 @@ export class App implements OnInit {
   }
 
   async handleLogout() {
-    if (confirm('Deseja realmente sair do sistema de Personal Trainer?')) {
+    const ok = await this.dialog.confirm({
+      title: 'Sair do sistema',
+      message: 'Deseja realmente sair do sistema de Personal Trainer?',
+      confirmText: 'Sair',
+      cancelText: 'Ficar',
+    });
+    if (ok) {
       await this.supa.signOut();
       this.router.navigate(['/login']);
     }

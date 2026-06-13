@@ -1,13 +1,15 @@
 ﻿import { Component, inject, OnInit, signal, computed, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, AbstractControl } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { DataService, Student, StudentSummary, Assessment, DashboardStats } from './data';
 import { SupabaseService } from './supabase.service';
 import { extractBase64FromDataUrl } from './lgpd-utils';
 import { generateAssessmentPDF } from './pdf-report';
 import { ToastService } from './toast.service';
+import { DialogService } from './dialog.service';
+import { shouldConvertCmToMm, cmToMm, fieldRangeHint } from './assessment-utils';
 
 // ==========================================
 // AUTH UTILITY — usa Supabase session real
@@ -473,7 +475,8 @@ export class DashboardComponent implements OnInit {
 })
 export class StudentsListComponent implements OnInit {
   private dataService = inject(DataService);
-  
+  private dialog = inject(DialogService);
+
   students = signal<StudentSummary[]>([]);
   searchValue = signal('');
   isLoading = signal(true);
@@ -511,13 +514,17 @@ export class StudentsListComponent implements OnInit {
     this.searchValue.set(val);
   }
 
-  onDeleteStudent(id: string, name: string) {
-    if (confirm(`Tem certeza que deseja excluir permanentemente o aluno ${name}? Todos os registros de fotos e avaliações serão perdidos.`)) {
-      this.dataService.deleteStudent(id).subscribe({
-        next: () => this.loadStudents(),
-        error: () => alert('Erro ao excluir aluno. Tente novamente.'),
-      });
-    }
+  async onDeleteStudent(id: string, name: string) {
+    const ok = await this.dialog.confirm({
+      title: 'Excluir aluno',
+      message: `Tem certeza que deseja excluir permanentemente o aluno ${name}? Todos os registros de fotos e avaliações serão perdidos.`,
+      confirmText: 'Excluir',
+    });
+    if (!ok) return;
+    this.dataService.deleteStudent(id).subscribe({
+      next: () => this.loadStudents(),
+      error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao excluir aluno. Tente novamente.', tone: 'error' }),
+    });
   }
 }
 
@@ -999,6 +1006,7 @@ export class NewStudentComponent {
 export class StudentProfileComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private dataService = inject(DataService);
+  private dialog = inject(DialogService);
 
   student = signal<Student | null>(null);
   isLoading = signal(true);
@@ -1036,11 +1044,16 @@ export class StudentProfileComponent implements OnInit {
     return age;
   }
 
-  onDeleteAssessment(studentId: string, assessmentId: string) {
-    if (confirm('Tem certeza que deseja excluir esta avaliação? Esta alteração não pode ser desfeita.')) {
+  async onDeleteAssessment(studentId: string, assessmentId: string) {
+    const ok = await this.dialog.confirm({
+      title: 'Excluir avaliação',
+      message: 'Tem certeza que deseja excluir esta avaliação? Esta alteração não pode ser desfeita.',
+      confirmText: 'Excluir',
+    });
+    if (ok) {
       this.dataService.deleteAssessment(assessmentId).subscribe({
         next: () => this.loadStudent(studentId),
-        error: () => alert('Erro ao excluir avaliação. Tente novamente.'),
+        error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao excluir avaliação. Tente novamente.', tone: 'error' }),
       });
     }
   }
@@ -1409,6 +1422,71 @@ export class StudentProfileComponent implements OnInit {
           </div>
         </form>
       }
+
+      <!-- Modal: campos obrigatórios faltando -->
+      @if (showValidationModal()) {
+        <div class="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+             (click)="closeValidationModal()">
+          <div class="w-full max-w-lg bg-[#141417] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh]"
+               (click)="$event.stopPropagation()">
+            <!-- Header -->
+            <div class="p-5 border-b border-white/5 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <mat-icon class="text-amber-400 !text-lg">warning</mat-icon>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-sm font-extrabold text-white">Revise os campos obrigatórios</h2>
+                <p class="text-[11px] text-slate-400 mt-0.5">
+                  {{ missingFields().length }} campo(s) faltando ou fora da faixa permitida. Corrija abaixo para concluir.
+                </p>
+              </div>
+              <button (click)="closeValidationModal()" class="text-slate-500 hover:text-white transition-colors">
+                <mat-icon class="!text-lg">close</mat-icon>
+              </button>
+            </div>
+
+            <!-- Lista de campos faltando, preenchível -->
+            <div class="p-5 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-white/10">
+              @for (f of missingFields(); track $index) {
+                <div class="flex items-center gap-3">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs font-bold text-white truncate">{{ f.label }}</p>
+                    <p class="text-[10px] text-slate-500">{{ f.stepName }} • {{ f.hint }}</p>
+                  </div>
+                  @if (f.isDate) {
+                    <input type="date" [formControl]="asFormControl(f.control)"
+                           class="w-40 px-3 py-2 bg-[#1C1C21] border rounded-lg text-xs text-white"
+                           [class.border-red-500/40]="f.control.invalid"
+                           [class.border-emerald-500/40]="f.control.valid" />
+                  } @else {
+                    <input type="number" step="0.1" inputMode="decimal" placeholder="0,0"
+                           [formControl]="asFormControl(f.control)"
+                           class="w-28 px-3 py-2 bg-[#1C1C21] border rounded-lg text-xs text-white text-right"
+                           [class.border-red-500/40]="f.control.invalid"
+                           [class.border-emerald-500/40]="f.control.valid" />
+                  }
+                  <mat-icon class="!text-base shrink-0" [class.text-emerald-400]="f.control.valid" [class.text-slate-600]="f.control.invalid">
+                    {{ f.control.valid ? 'check_circle' : 'radio_button_unchecked' }}
+                  </mat-icon>
+                </div>
+              }
+            </div>
+
+            <!-- Footer -->
+            <div class="p-5 border-t border-white/5 flex items-center justify-between gap-3">
+              <button (click)="closeValidationModal()"
+                      class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors">
+                Voltar ao formulário
+              </button>
+              <button (click)="onSubmit()"
+                      class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-extrabold text-white flex items-center gap-2 transition-all shadow-md shadow-blue-600/10">
+                <mat-icon class="!text-sm">save</mat-icon>
+                Preencher e {{ isEditMode() ? 'Salvar Alterações' : 'Concluir Avaliação' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -1425,11 +1503,62 @@ export class NewAssessmentComponent implements OnInit {
   isEditMode = signal(false);
   editAssessmentId = signal<string | null>(null);
 
+  // Modal de campos obrigatórios / inválidos
+  showValidationModal = signal(false);
+  missingFields = signal<{ label: string; stepName: string; hint: string; control: AbstractControl; isDate: boolean }[]>([]);
+
+  // Metadados: rótulos amigáveis + passo de cada campo (inclui opcionais com faixa)
+  private readonly fieldGroupsMeta: { key: string; stepName: string; fields: Record<string, string> }[] = [
+    { key: '', stepName: 'Geral', fields: { date: 'Data da Medição' } },
+    { key: 'bioimpedance', stepName: 'Passo 1 — Balança', fields: {
+      weightKg: 'Peso (kg)', bodyFatPercentage: '% Gordura', skeletalMusclePercentage: '% Músculo Esquelético',
+      restingMetabolismKcal: 'Metabolismo Basal (kcal)', bodyAge: 'Idade Corporal', visceralFatLevel: 'Gordura Visceral',
+      waterPercentage: '% Água Corporal', perfilBioimpedancia: 'Perfil (Bioimpedância)',
+    } },
+    { key: 'circumferences', stepName: 'Passo 2 — Circunferências', fields: {
+      neckCm: 'Pescoço', shoulderCm: 'Ombro', chestCm: 'Tórax', waistCm: 'Cintura', abdomenCm: 'Abdômen', hipCm: 'Quadril',
+      rightArmRelaxedCm: 'Braço D. (relaxado)', leftArmRelaxedCm: 'Braço E. (relaxado)',
+      rightArmFlexedCm: 'Braço D. (contraído)', leftArmFlexedCm: 'Braço E. (contraído)',
+      rightForearmCm: 'Antebraço D.', leftForearmCm: 'Antebraço E.',
+      rightThighProximalCm: 'Coxa D. (proximal)', leftThighProximalCm: 'Coxa E. (proximal)',
+      rightCalfCm: 'Panturrilha D.', leftCalfCm: 'Panturrilha E.',
+    } },
+    { key: 'skinfolds', stepName: 'Passo 3 — Dobras', fields: {
+      tricepsMm: 'Tríceps', bicepsMm: 'Bíceps', subscapularMm: 'Subescapular', chestMm: 'Peitoral',
+      midaxillaryMm: 'Axilar Média', suprailiacMm: 'Supra-ilíaca', abdominalMm: 'Abdominal',
+      midThighMm: 'Coxa', calfMm: 'Panturrilha',
+    } },
+  ];
+
+  private collectMissingFields() {
+    const missing: { label: string; stepName: string; hint: string; control: AbstractControl; isDate: boolean }[] = [];
+    for (const grp of this.fieldGroupsMeta) {
+      const container = grp.key ? (this.assessmentForm.get(grp.key) as FormGroup) : this.assessmentForm;
+      if (!container) continue;
+      for (const [ctrlName, label] of Object.entries(grp.fields)) {
+        const control = grp.key ? container.get(ctrlName) : this.assessmentForm.get(ctrlName);
+        if (control && control.invalid) {
+          missing.push({ label, stepName: grp.stepName, hint: fieldRangeHint(ctrlName), control, isDate: ctrlName === 'date' });
+        }
+      }
+    }
+    this.missingFields.set(missing);
+    return missing;
+  }
+
+  asFormControl(c: AbstractControl): FormControl {
+    return c as FormControl;
+  }
+
+  closeValidationModal() {
+    this.showValidationModal.set(false);
+  }
+
   // Formulário completo
   assessmentForm: FormGroup = this.fb.group({
     date: [new Date().toISOString().substring(0, 10), [Validators.required]],
     bioimpedance: this.fb.group({
-      perfilBioimpedancia: [''],          // Omron: perfil 1-4
+      perfilBioimpedancia: ['', [Validators.min(1), Validators.max(4)]],  // Omron: perfil 1-4
       isAthlete: [false],                 // Omron: modo atleta
       weightKg: ['', [Validators.required, Validators.min(1)]],
       bmi: [''],                          // opcional — API calcula automaticamente
@@ -1438,7 +1567,7 @@ export class NewAssessmentComponent implements OnInit {
       restingMetabolismKcal: ['', [Validators.required, Validators.min(1)]],
       bodyAge: ['', [Validators.required, Validators.min(10), Validators.max(100)]],
       visceralFatLevel: ['', [Validators.required, Validators.min(1), Validators.max(30)]],
-      waterPercentage: [''],              // % água corporal (Omron)
+      waterPercentage: ['', [Validators.min(0), Validators.max(100)]],   // % água corporal (Omron)
     }),
     circumferences: this.fb.group({
       neckCm: ['', [Validators.required, Validators.min(0.1)]],
@@ -1529,9 +1658,12 @@ export class NewAssessmentComponent implements OnInit {
 
   onSubmit() {
     if (this.assessmentForm.invalid) {
-      this.toast.warning('Preencha todos os campos obrigatórios (medidas devem ser maiores que zero) nos 3 passos antes de finalizar.');
+      this.assessmentForm.markAllAsTouched();
+      this.collectMissingFields();
+      this.showValidationModal.set(true);
       return;
     }
+    this.showValidationModal.set(false);
     const std = this.student();
     if (!std) return;
 
@@ -1602,11 +1734,9 @@ export class NewAssessmentComponent implements OnInit {
   maybeConvertSkinfold(controlName: string) {
     const ctrl = (this.assessmentForm.get('skinfolds') as FormGroup)?.get(controlName);
     if (!ctrl) return;
-    const raw = ctrl.value;
-    const num = parseFloat(raw);
-    if (!Number.isFinite(num) || num <= 0) return;
-    if (num > 0 && num < 6) {
-      const mm = Math.round(num * 10 * 10) / 10;
+    const num = parseFloat(ctrl.value);
+    if (shouldConvertCmToMm(num)) {
+      const mm = cmToMm(num);
       ctrl.setValue(mm);
       this.toast.info(`Medida ${num} cm convertida para ${mm} mm.`);
     }
@@ -1976,6 +2106,7 @@ export class AssessmentReportComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private dataService = inject(DataService);
   private cdr = inject(ChangeDetectorRef);
+  private dialog = inject(DialogService);
 
   student = signal<Student | null>(null);
   assessment = signal<Assessment | null>(null);
@@ -2102,7 +2233,7 @@ export class AssessmentReportComponent implements OnInit {
     const std = this.student();
     const aval = this.assessment();
     if (!std || !aval) {
-      alert('Aguarde o carregamento completo da avaliação e tente novamente.');
+      this.dialog.alert({ title: 'Aguarde', message: 'Aguarde o carregamento completo da avaliação e tente novamente.', tone: 'info' });
       return;
     }
 
@@ -2121,7 +2252,7 @@ export class AssessmentReportComponent implements OnInit {
       doc.save(`Avaliacao_Fisica_${safeName}_${aval.date}.pdf`);
     } catch (err) {
       console.error('[exportPDF]', err);
-      alert(`Erro ao gerar PDF: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
+      this.dialog.alert({ title: 'Erro ao gerar PDF', message: err instanceof Error ? err.message : 'Tente novamente.', tone: 'error' });
     } finally {
       this.isGeneratingPdf.set(false);
       this.cdr.detectChanges();
@@ -2290,6 +2421,8 @@ export class AssessmentReportComponent implements OnInit {
 export class StudentGalleryComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private dataService = inject(DataService);
+  private dialog = inject(DialogService);
+  private toast = inject(ToastService);
 
   student = signal<Student | null>(null);
   isLoading = signal(true);
@@ -2416,20 +2549,26 @@ export class StudentGalleryComponent implements OnInit {
         this.previewBase64.set('');
         this.loadGallery(studentId);
         this.isSubmitting.set(false);
+        this.toast.success('Foto adicionada à galeria!');
       },
       error: (err) => {
         console.error(err);
-        alert('Erro ao carregar a foto do aluno.');
+        this.dialog.alert({ title: 'Erro', message: 'Erro ao carregar a foto do aluno.', tone: 'error' });
         this.isSubmitting.set(false);
       }
     });
   }
 
-  onDeletePhoto(studentId: string, photoId: string) {
-    if (confirm('Deseja realmente remover esta foto de evolução?')) {
+  async onDeletePhoto(studentId: string, photoId: string) {
+    const ok = await this.dialog.confirm({
+      title: 'Remover foto',
+      message: 'Deseja realmente remover esta foto de evolução?',
+      confirmText: 'Remover',
+    });
+    if (ok) {
       this.dataService.deletePhoto(photoId).subscribe({
         next: () => this.loadGallery(studentId),
-        error: () => alert('Erro ao remover foto. Tente novamente.'),
+        error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao remover foto. Tente novamente.', tone: 'error' }),
       });
     }
   }
