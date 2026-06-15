@@ -70,6 +70,29 @@ Deno.serve(async (req) => {
         .single();
 
       if (error) throw error;
+
+      if (body.anamnesis) {
+        const ana = body.anamnesis;
+        const anaFields = {
+          cardiac_condition: ana.cardiac_condition ?? false,
+          joint_pain: ana.joint_pain ?? false,
+          chest_pain_during_exercise: ana.chest_pain_during_exercise ?? false,
+          recent_surgery_description: ana.recent_surgery_description ?? '',
+          active_medications: ana.active_medications ?? '',
+          notes: ana.notes ?? '',
+        };
+        const { data: existing } = await client
+          .from('anamneses')
+          .select('id')
+          .eq('aluno_id', id)
+          .maybeSingle();
+        if (existing) {
+          await client.from('anamneses').update(anaFields).eq('aluno_id', id);
+        } else {
+          await client.from('anamneses').insert({ aluno_id: id, ...anaFields });
+        }
+      }
+
       return jsonResponse(data);
     }
 

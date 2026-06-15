@@ -16,6 +16,7 @@ export const routes: Routes = [
   { path: '', component: DashboardComponent },
   { path: 'alunos', component: StudentsListComponent },
   { path: 'alunos/novo', component: NewStudentComponent },
+  { path: 'alunos/:id/editar', component: NewStudentComponent },
   { path: 'alunos/:id', component: StudentProfileComponent },
   { path: 'alunos/:id/lgpd', component: LgpdSignComponent },
   { path: 'alunos/:id/avaliacoes/nova', component: NewAssessmentComponent },

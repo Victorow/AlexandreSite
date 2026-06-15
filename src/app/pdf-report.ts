@@ -104,12 +104,19 @@ export function pdfDelta(
 // GERAÇÃO DO PDF (usa jsPDF — vetorial, layout próprio)
 // =====================================================================
 
+export interface PdfPhoto {
+  category: string;
+  date: string;
+  dataUrl: string;
+}
+
 export interface AssessmentPdfData {
   student: Student;
   assessment: Assessment;
   previous: Assessment | null;
   trainerName: string;
   generatedAt: Date;
+  photos?: PdfPhoto[];
 }
 
 // Paleta (documento claro, profissional)
@@ -634,6 +641,96 @@ export function generateAssessmentPDF(data: AssessmentPdfData): jsPDF {
     { label: 'Medicações em uso', cur: an ? pdfText(an.active_medications) : '—' },
     { label: 'Observações', cur: an ? pdfText(an.notes) : '—' },
   ], false);
+
+  // ======================= EVOLUÇÃO VISUAL (FOTOS) =======================
+  const photos = data.photos ?? [];
+  if (photos.length > 0) {
+    // Ordem de exibição dos ângulos
+    const ANGLE_ORDER = ['FRENTE', 'LADO_DIREITO', 'LADO_ESQUERDO', 'COSTAS', 'PERFIL'];
+    const ANGLE_LABEL: Record<string, string> = {
+      FRENTE: 'Frente', LADO_DIREITO: 'Lado Direito',
+      LADO_ESQUERDO: 'Lado Esquerdo', COSTAS: 'Costas', PERFIL: 'Lateral',
+    };
+
+    // Agrupa por ângulo: foto mais antiga e mais recente
+    const byCategory = new Map<string, { oldest: PdfPhoto; newest: PdfPhoto }>();
+    for (const cat of ANGLE_ORDER) {
+      const group = photos.filter(p => p.category === cat).sort((a, b) => a.date.localeCompare(b.date));
+      if (group.length > 0) {
+        byCategory.set(cat, { oldest: group[0], newest: group[group.length - 1] });
+      }
+    }
+
+    if (byCategory.size > 0) {
+      doc.addPage();
+      let py = M;
+
+      // Cabeçalho da página de fotos
+      setFill(C.primary);
+      doc.roundedRect(M, py, CONTENT_W, 10, 2, 2, 'F');
+      setText(C.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Evolução Visual — Comparativo de Fotos', M + 4, py + 6.5);
+      py += 14;
+
+      const IMG_W = 80;
+      const IMG_H = 100;
+      const SECTION_H = 7 + IMG_H + 8; // label + image + gap
+
+      for (const [cat, { oldest, newest }] of byCategory.entries()) {
+        // Nova página se não couber
+        if (py + SECTION_H > BOTTOM_LIMIT) {
+          doc.addPage();
+          py = M;
+        }
+
+        // Rótulo do ângulo
+        setText(C.ink);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text(ANGLE_LABEL[cat] ?? cat, M, py + 5);
+        py += 7;
+
+        const isSame = oldest.date === newest.date;
+        const centerX = M + CONTENT_W / 2;
+
+        if (isSame) {
+          // Só 1 foto — exibir centralizada
+          const imgX = centerX - IMG_W / 2;
+          try {
+            doc.addImage(oldest.dataUrl, 'JPEG', imgX, py, IMG_W, IMG_H);
+          } catch { /* imagem inválida, ignora */ }
+          setText(C.muted);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.text(pdfFormatDate(oldest.date), imgX + IMG_W / 2, py + IMG_H + 4, { align: 'center' });
+        } else {
+          // 2 fotos: Início (esquerda) e Recente (direita)
+          const gap = CONTENT_W - 2 * IMG_W;
+          const leftX = M;
+          const rightX = M + IMG_W + gap;
+
+          setText(C.muted);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          doc.text('Início', leftX + IMG_W / 2, py - 1, { align: 'center' });
+          doc.text('Recente', rightX + IMG_W / 2, py - 1, { align: 'center' });
+
+          try { doc.addImage(oldest.dataUrl, 'JPEG', leftX, py, IMG_W, IMG_H); } catch { /* ignora */ }
+          try { doc.addImage(newest.dataUrl, 'JPEG', rightX, py, IMG_W, IMG_H); } catch { /* ignora */ }
+
+          setText(C.muted);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.5);
+          doc.text(pdfFormatDate(oldest.date), leftX + IMG_W / 2, py + IMG_H + 4, { align: 'center' });
+          doc.text(pdfFormatDate(newest.date), rightX + IMG_W / 2, py + IMG_H + 4, { align: 'center' });
+        }
+
+        py += IMG_H + 8;
+      }
+    }
+  }
 
   // ======================= RODAPÉ EM TODAS AS PÁGINAS =======================
   const pageCount = doc.getNumberOfPages();

@@ -19,8 +19,8 @@ Deno.serve(async (req) => {
       if (!aluno_id || !date || !category || !image_base64) {
         return errorResponse('Campos obrigatórios: aluno_id, date, category, image_base64');
       }
-      if (!['FRENTE', 'PERFIL', 'COSTAS'].includes(category)) {
-        return errorResponse('category inválida. Use: FRENTE, PERFIL ou COSTAS');
+      if (!['FRENTE', 'LADO_DIREITO', 'LADO_ESQUERDO', 'COSTAS'].includes(category)) {
+        return errorResponse('category inválida. Use: FRENTE, LADO_DIREITO, LADO_ESQUERDO ou COSTAS');
       }
 
       // Verify ownership

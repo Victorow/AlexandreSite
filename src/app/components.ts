@@ -3,13 +3,27 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, AbstractControl } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { DataService, Student, StudentSummary, Assessment, DashboardStats } from './data';
+import { DataService, Student, StudentSummary, Assessment, DashboardStats, PhotoCategory } from './data';
 import { SupabaseService } from './supabase.service';
 import { extractBase64FromDataUrl } from './lgpd-utils';
-import { generateAssessmentPDF } from './pdf-report';
+import { generateAssessmentPDF, PdfPhoto } from './pdf-report';
 import { ToastService } from './toast.service';
 import { DialogService } from './dialog.service';
 import { shouldConvertCmToMm, cmToMm, fieldRangeHint } from './assessment-utils';
+
+// ==========================================
+// PHOTO CATEGORY LABEL
+// ==========================================
+export function categoryLabel(cat: string): string {
+  const MAP: Record<string, string> = {
+    FRENTE: 'Frente',
+    LADO_DIREITO: 'Lado Direito',
+    LADO_ESQUERDO: 'Lado Esquerdo',
+    COSTAS: 'Costas',
+    PERFIL: 'Lateral',
+  };
+  return MAP[cat] ?? cat;
+}
 
 // ==========================================
 // AUTH UTILITY — usa Supabase session real
@@ -539,8 +553,12 @@ export class StudentsListComponent implements OnInit {
   template: `
     <div class="space-y-6 max-w-3xl mx-auto">
       <div>
-        <h1 class="text-2xl font-extrabold tracking-tight text-white font-sans">Cadastrar Aluno & Anamnese</h1>
-        <p class="text-xs text-slate-400">Preencha as informações do aluno e do histórico clínico inicial.</p>
+        <h1 class="text-2xl font-extrabold tracking-tight text-white font-sans">
+          {{ isEditMode() ? 'Editar Cadastro do Aluno' : 'Cadastrar Aluno & Anamnese' }}
+        </h1>
+        <p class="text-xs text-slate-400">
+          {{ isEditMode() ? 'Atualize os dados do aluno e o histórico clínico.' : 'Preencha as informações do aluno e do histórico clínico inicial.' }}
+        </p>
       </div>
 
       <form [formGroup]="studentForm" (ngSubmit)="onSubmit()" class="space-y-6">
@@ -709,19 +727,20 @@ export class StudentsListComponent implements OnInit {
 
         <!-- Botões de Ação -->
         <div class="flex justify-end gap-3 pt-4">
-          <a routerLink="/alunos" class="px-5 py-2.5 bg-[#141417] hover:bg-[#1C1C21] border border-white/5 rounded-xl text-xs font-bold text-slate-300 transition-colors">
+          <a [routerLink]="isEditMode() ? ['/alunos', editStudentId()] : '/alunos'"
+             class="px-5 py-2.5 bg-[#141417] hover:bg-[#1C1C21] border border-white/5 rounded-xl text-xs font-bold text-slate-300 transition-colors">
             Cancelar
           </a>
-          <button 
+          <button
             type="submit"
             [disabled]="studentForm.invalid || isSubmitting()"
             class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all"
           >
             @if (isSubmitting()) {
               <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              Adicionando...
+              {{ isEditMode() ? 'Salvando...' : 'Adicionando...' }}
             } @else {
-              Salvar Cadastro
+              {{ isEditMode() ? 'Salvar Alterações' : 'Salvar Cadastro' }}
             }
           </button>
         </div>
@@ -729,13 +748,17 @@ export class StudentsListComponent implements OnInit {
     </div>
   `
 })
-export class NewStudentComponent {
+export class NewStudentComponent implements OnInit {
   private fb = inject(FormBuilder);
   private dataService = inject(DataService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private toast = inject(ToastService);
 
   isSubmitting = signal(false);
   errorMessage = signal('');
+  isEditMode = signal(false);
+  editStudentId = signal<string | null>(null);
 
   studentForm: FormGroup = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
@@ -754,6 +777,41 @@ export class NewStudentComponent {
       notes: ['']
     })
   });
+
+  ngOnInit() {
+    this.route.params.subscribe(p => {
+      const editId = p['id'] ?? null;
+      if (editId && this.router.url.includes('/editar')) {
+        this.isEditMode.set(true);
+        this.editStudentId.set(editId);
+        this.dataService.getStudent(editId).subscribe({
+          next: (std) => this.prefillForEdit(std),
+          error: () => this.errorMessage.set('Erro ao carregar dados do aluno.'),
+        });
+      }
+    });
+  }
+
+  private prefillForEdit(std: Student) {
+    const ana = std.anamneses;
+    this.studentForm.patchValue({
+      name: std.name,
+      birthDate: std.birth_date,
+      gender: std.gender,
+      heightCm: std.height_cm,
+      goal: std.goal ?? '',
+      phoneNumber: std.phone_number ?? '',
+      lgpdConsentStatus: std.lgpd_consent_status,
+      anamnesis: {
+        cardiacCondition: ana?.cardiac_condition ?? false,
+        jointPain: ana?.joint_pain ?? false,
+        chestPainDuringExercise: ana?.chest_pain_during_exercise ?? false,
+        recentSurgeryDescription: ana?.recent_surgery_description ?? '',
+        activeMedications: ana?.active_medications ?? '',
+        notes: ana?.notes ?? '',
+      },
+    });
+  }
 
   onSubmit() {
     if (this.studentForm.invalid) return;
@@ -779,13 +837,19 @@ export class NewStudentComponent {
       },
     };
 
-    this.dataService.createStudent(payload).subscribe({
+    const editId = this.editStudentId();
+    const req$ = editId
+      ? this.dataService.updateStudent(editId, payload)
+      : this.dataService.createStudent(payload);
+
+    req$.subscribe({
       next: (std) => {
+        this.toast.success(editId ? 'Cadastro atualizado com sucesso!' : 'Aluno cadastrado com sucesso!');
         this.router.navigate(['/alunos', std.id]);
       },
       error: (err) => {
         console.error(err);
-        this.errorMessage.set('Erro ao criar aluno. Tente novamente mais tarde.');
+        this.errorMessage.set(editId ? 'Erro ao atualizar cadastro.' : 'Erro ao criar aluno. Tente novamente mais tarde.');
         this.isSubmitting.set(false);
       }
     });
@@ -831,6 +895,10 @@ export class NewStudentComponent {
               <a [routerLink]="['/alunos', std.id, 'galeria']" class="px-3.5 py-2 bg-[#1C1C21] hover:bg-[#25252B] transition-colors rounded-xl text-xs font-bold text-white flex items-center gap-2 border border-white/5">
                 <mat-icon class="!text-sm h-4">photo_library</mat-icon>
                 Galeria Evolução
+              </a>
+              <a [routerLink]="['/alunos', std.id, 'editar']" class="px-3.5 py-2 bg-[#1C1C21] hover:bg-[#25252B] transition-colors rounded-xl text-xs font-bold text-white flex items-center gap-2 border border-white/5">
+                <mat-icon class="!text-sm h-4">edit</mat-icon>
+                Editar Cadastro
               </a>
               @if (std.lgpd_consent_status === 'PENDING') {
                 <a [routerLink]="['/alunos', std.id, 'lgpd']"
@@ -985,7 +1053,7 @@ export class NewStudentComponent {
                       <div class="aspect-square bg-slate-800 rounded-lg overflow-hidden relative group border border-white/5">
                         <img [src]="ph.url ?? ph.storage_path" alt="Evolução" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
                         <span class="absolute bottom-1 right-1 bg-black/60 text-[8px] text-slate-300 font-bold px-1.5 py-0.5 rounded uppercase">
-                          {{ ph.category }}
+                          {{ categoryLabel(ph.category) }}
                         </span>
                       </div>
                     }
@@ -1010,6 +1078,7 @@ export class StudentProfileComponent implements OnInit {
 
   student = signal<Student | null>(null);
   isLoading = signal(true);
+  categoryLabel = categoryLabel;
 
   ngOnInit() {
     this.route.params.subscribe(p => {
@@ -2229,7 +2298,7 @@ export class AssessmentReportComponent implements OnInit {
     }
   }
 
-  exportPDF(studentName: string) {
+  async exportPDF(studentName: string) {
     const std = this.student();
     const aval = this.assessment();
     if (!std || !aval) {
@@ -2241,12 +2310,32 @@ export class AssessmentReportComponent implements OnInit {
     this.cdr.detectChanges();
 
     try {
+      // Converte fotos para base64 para embutir no PDF
+      const photos: PdfPhoto[] = [];
+      for (const foto of std.fotos) {
+        if (!foto.url) continue;
+        try {
+          const resp = await fetch(foto.url);
+          const blob = await resp.blob();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          photos.push({ category: foto.category, date: foto.date, dataUrl });
+        } catch {
+          // Foto inacessível — ignora e continua
+        }
+      }
+
       const doc = generateAssessmentPDF({
         student: std,
         assessment: aval,
         previous: this.previousAssessment(),
         trainerName: getTrainerName(),
         generatedAt: new Date(),
+        photos,
       });
       const safeName = studentName.replace(/\s+/g, '_').replace(/[^\w-]/g, '');
       doc.save(`Avaliacao_Fisica_${safeName}_${aval.date}.pdf`);
@@ -2309,9 +2398,10 @@ export class AssessmentReportComponent implements OnInit {
                     (change)="onCategorySelected($any($event.target).value)"
                     class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white"
                   >
-                    <option value="FRENTE">Frente (Silhueta)</option>
-                    <option value="PERFIL">Perfil (Lateral)</option>
-                    <option value="COSTAS">Costas (Posterior)</option>
+                    <option value="FRENTE">Frente</option>
+                    <option value="LADO_DIREITO">Lado Direito</option>
+                    <option value="LADO_ESQUERDO">Lado Esquerdo</option>
+                    <option value="COSTAS">Costas</option>
                   </select>
                 </div>
 
@@ -2402,7 +2492,7 @@ export class AssessmentReportComponent implements OnInit {
 
                         <div>
                           <span class="text-[8px] bg-blue-600 text-white font-black px-1.5 py-0.5 rounded uppercase">
-                            {{ ph.category }}
+                            {{ categoryLabel(ph.category) }}
                           </span>
                           <p class="text-[10px] text-white font-mono font-bold mt-1">{{ ph.date | date:'dd/MM/yyyy' }}</p>
                         </div>
@@ -2432,14 +2522,17 @@ export class StudentGalleryComponent implements OnInit {
   previewBase64 = signal('');
   uploadError = signal('');
 
-  uploadCategory: 'FRENTE' | 'PERFIL' | 'COSTAS' = 'FRENTE';
+  uploadCategory: PhotoCategory = 'FRENTE';
   uploadDate = new Date().toISOString().substring(0, 10);
 
   onCategorySelected(val: string) {
-    if (val === 'FRENTE' || val === 'PERFIL' || val === 'COSTAS') {
-      this.uploadCategory = val;
+    const valid: PhotoCategory[] = ['FRENTE', 'LADO_DIREITO', 'LADO_ESQUERDO', 'COSTAS'];
+    if (valid.includes(val as PhotoCategory)) {
+      this.uploadCategory = val as PhotoCategory;
     }
   }
+
+  categoryLabel = categoryLabel;
 
   ngOnInit() {
     this.route.params.subscribe(p => {
@@ -2539,7 +2632,7 @@ export class StudentGalleryComponent implements OnInit {
     const payload = {
       aluno_id: studentId,
       date: this.uploadDate,
-      category: this.uploadCategory as 'FRENTE' | 'PERFIL' | 'COSTAS',
+      category: this.uploadCategory,
       image_base64: base64,
       mime_type: 'image/jpeg',
     };

@@ -99,10 +99,12 @@ export interface Assessment {
   circunferencias: Circumferences;
 }
 
+export type PhotoCategory = 'FRENTE' | 'LADO_DIREITO' | 'LADO_ESQUERDO' | 'COSTAS' | 'PERFIL';
+
 export interface Photo {
   id: string;
   date: string;
-  category: 'FRENTE' | 'PERFIL' | 'COSTAS';
+  category: PhotoCategory;
   storage_path: string;
   url?: string;
 }
@@ -209,7 +211,7 @@ export class DataService {
   addPhoto(payload: {
     aluno_id: string;
     date: string;
-    category: 'FRENTE' | 'PERFIL' | 'COSTAS';
+    category: PhotoCategory;
     image_base64: string;
     mime_type?: string;
   }): Observable<Photo> {
