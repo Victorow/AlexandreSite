@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
         .from('avaliacoes')
         .select('id, date, alunos!inner(id, gender, birth_date, height_cm, personal_trainer_id)')
         .eq('id', avaliacao_id)
+        .is('deleted_at', null)
         .single();
       // deno-lint-ignore no-explicit-any
       const alunoRel: any = (aval as any)?.alunos;

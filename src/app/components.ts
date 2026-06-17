@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, AbstractControl } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { DataService, Student, StudentSummary, Assessment, DashboardStats, PhotoCategory } from './data';
+import { DataService, Student, StudentSummary, TrashedStudent, Assessment, DashboardStats, PhotoCategory } from './data';
 import { SupabaseService } from './supabase.service';
 import { extractBase64FromDataUrl } from './lgpd-utils';
 import { generateAssessmentPDF, PdfPhoto } from './pdf-report';
@@ -390,11 +390,45 @@ export class DashboardComponent implements OnInit {
           <h1 class="text-2xl font-extrabold tracking-tight text-white font-sans">Gestão de Alunos</h1>
           <p class="text-xs text-slate-400">Visualize, busque e gerencie todos os alunos ativos.</p>
         </div>
-        <a routerLink="/alunos/novo" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all shadow-md shadow-blue-600/10">
-          <mat-icon class="!text-xs">add</mat-icon>
-          Novo Aluno
-        </a>
+        <div class="flex items-center gap-2">
+          <button (click)="toggleTrash()" class="px-3.5 py-2 bg-[#1C1C21] hover:bg-[#25252B] border border-white/5 rounded-xl text-xs font-bold text-slate-300 flex items-center gap-2 transition-all">
+            <mat-icon class="!text-xs">delete_outline</mat-icon>
+            Lixeira{{ trashedStudents().length ? ' (' + trashedStudents().length + ')' : '' }}
+          </button>
+          <a routerLink="/alunos/novo" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-all shadow-md shadow-blue-600/10">
+            <mat-icon class="!text-xs">add</mat-icon>
+            Novo Aluno
+          </a>
+        </div>
       </div>
+
+      <!-- Lixeira de Alunos -->
+      @if (showTrash()) {
+        <div class="bg-[#141417] p-5 rounded-2xl border border-white/5 space-y-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <mat-icon class="text-slate-400 !text-sm">delete_outline</mat-icon>
+            Alunos na Lixeira
+          </h3>
+          @if (trashedStudents().length === 0) {
+            <p class="text-xs text-slate-500 py-2">Nenhum aluno na lixeira.</p>
+          } @else {
+            <div class="space-y-2">
+              @for (std of trashedStudents(); track std.id) {
+                <div class="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5">
+                  <div class="text-xs">
+                    <span class="font-semibold text-slate-200">{{ std.name }}</span>
+                    @if (std.goal) { <span class="text-slate-500"> • {{ std.goal }}</span> }
+                  </div>
+                  <button (click)="onRestoreStudent(std.id)" class="px-2.5 py-1 bg-emerald-600/90 hover:bg-emerald-500 transition-colors rounded-lg text-xs font-bold text-white inline-flex items-center gap-1">
+                    <mat-icon class="!text-xs">restore</mat-icon>
+                    Restaurar
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
 
       <!-- Filtros e Busca -->
       <div class="flex gap-4 bg-[#141417] p-4 rounded-2xl border border-white/5">
@@ -492,6 +526,8 @@ export class StudentsListComponent implements OnInit {
   private dialog = inject(DialogService);
 
   students = signal<StudentSummary[]>([]);
+  trashedStudents = signal<TrashedStudent[]>([]);
+  showTrash = signal(false);
   searchValue = signal('');
   isLoading = signal(true);
 
@@ -508,6 +544,7 @@ export class StudentsListComponent implements OnInit {
 
   ngOnInit() {
     this.loadStudents();
+    this.loadTrash();
   }
 
   loadStudents() {
@@ -524,6 +561,18 @@ export class StudentsListComponent implements OnInit {
     });
   }
 
+  loadTrash() {
+    this.dataService.getTrashedStudents().subscribe({
+      next: (res) => this.trashedStudents.set(res),
+      error: (err) => console.error(err),
+    });
+  }
+
+  toggleTrash() {
+    this.showTrash.update(v => !v);
+    if (this.showTrash()) this.loadTrash();
+  }
+
   onSearch(val: string) {
     this.searchValue.set(val);
   }
@@ -531,13 +580,20 @@ export class StudentsListComponent implements OnInit {
   async onDeleteStudent(id: string, name: string) {
     const ok = await this.dialog.confirm({
       title: 'Excluir aluno',
-      message: `Tem certeza que deseja excluir permanentemente o aluno ${name}? Todos os registros de fotos e avaliações serão perdidos.`,
+      message: `O aluno ${name} vai para a Lixeira (com fotos e avaliações) e pode ser restaurado depois. Deseja continuar?`,
       confirmText: 'Excluir',
     });
     if (!ok) return;
     this.dataService.deleteStudent(id).subscribe({
-      next: () => this.loadStudents(),
+      next: () => { this.loadStudents(); this.loadTrash(); },
       error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao excluir aluno. Tente novamente.', tone: 'error' }),
+    });
+  }
+
+  onRestoreStudent(id: string) {
+    this.dataService.restoreStudent(id).subscribe({
+      next: () => { this.loadStudents(); this.loadTrash(); },
+      error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao restaurar aluno. Tente novamente.', tone: 'error' }),
     });
   }
 }
@@ -970,6 +1026,35 @@ export class NewStudentComponent implements OnInit {
                     </table>
                   </div>
                 }
+
+                <!-- Lixeira: avaliações excluídas (recuperáveis) -->
+                @if (std.avaliacoes_trash?.length) {
+                  <div class="pt-3 border-t border-white/5">
+                    <button (click)="showTrash.set(!showTrash())" class="flex items-center gap-2 text-[11px] font-bold text-slate-400 hover:text-slate-200 transition-colors">
+                      <mat-icon class="!text-sm">{{ showTrash() ? 'expand_less' : 'expand_more' }}</mat-icon>
+                      Lixeira ({{ std.avaliacoes_trash?.length }})
+                    </button>
+                    @if (showTrash()) {
+                      <div class="mt-2 space-y-2">
+                        @for (aval of std.avaliacoes_trash; track aval.id) {
+                          <div class="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5">
+                            <div class="text-xs text-slate-400">
+                              <span class="font-mono text-slate-300">{{ aval.date | date:'dd/MM/yyyy' }}</span>
+                              <span class="mx-2 text-slate-600">•</span>
+                              {{ aval.bioimpedancias?.weight_kg ?? '—' }} kg
+                              <span class="mx-2 text-slate-600">•</span>
+                              {{ aval.body_fat_percentage ?? '—' }}% gordura
+                            </div>
+                            <button (click)="onRestoreAssessment(std.id, aval.id)" class="px-2.5 py-1 bg-emerald-600/90 hover:bg-emerald-500 transition-colors rounded-lg text-xs font-bold text-white inline-flex items-center gap-1">
+                              <mat-icon class="!text-xs">restore</mat-icon>
+                              Restaurar
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
               </div>
 
               <!-- Anamnese do Aluno -->
@@ -1078,6 +1163,7 @@ export class StudentProfileComponent implements OnInit {
 
   student = signal<Student | null>(null);
   isLoading = signal(true);
+  showTrash = signal(false);
   categoryLabel = categoryLabel;
 
   ngOnInit() {
@@ -1116,7 +1202,7 @@ export class StudentProfileComponent implements OnInit {
   async onDeleteAssessment(studentId: string, assessmentId: string) {
     const ok = await this.dialog.confirm({
       title: 'Excluir avaliação',
-      message: 'Tem certeza que deseja excluir esta avaliação? Esta alteração não pode ser desfeita.',
+      message: 'Esta avaliação vai para a Lixeira e pode ser restaurada depois. Deseja continuar?',
       confirmText: 'Excluir',
     });
     if (ok) {
@@ -1125,6 +1211,13 @@ export class StudentProfileComponent implements OnInit {
         error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao excluir avaliação. Tente novamente.', tone: 'error' }),
       });
     }
+  }
+
+  onRestoreAssessment(studentId: string, assessmentId: string) {
+    this.dataService.restoreAssessment(assessmentId).subscribe({
+      next: () => this.loadStudent(studentId),
+      error: () => this.dialog.alert({ title: 'Erro', message: 'Erro ao restaurar avaliação. Tente novamente.', tone: 'error' }),
+    });
   }
 }
 

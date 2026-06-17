@@ -31,11 +31,29 @@ Deno.serve(async (req) => {
         `)
         .eq('id', id)
         .eq('personal_trainer_id', user.id)
+        .is('deleted_at', null)
+        .is('avaliacoes.deleted_at', null)
         .order('date', { referencedTable: 'avaliacoes', ascending: false })
         .order('date', { referencedTable: 'fotos', ascending: false })
         .single();
 
       if (error) return errorResponse('Aluno não encontrado', 404);
+
+      // Avaliações na lixeira (soft-deleted) — listadas à parte para permitir restaurar.
+      const { data: trashed } = await client
+        .from('avaliacoes')
+        .select(`
+          id, date, bmi, bmi_classification, body_fat_percentage, fat_mass_kg,
+          lean_mass_kg, body_fat_classification, visceral_risk,
+          skinfolds_fat_percentage, skinfolds_sum_mm, rcq, deleted_at,
+          bioimpedancias(*),
+          dobras_cutaneas(*),
+          circunferencias(*)
+        `)
+        .eq('aluno_id', id)
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
+      aluno.avaliacoes_trash = trashed ?? [];
 
       // Bucket privado (LGPD): gera URL assinada temporária para cada foto.
       if (aluno?.fotos?.length) {
@@ -97,9 +115,24 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === 'DELETE') {
+      // Soft-delete: move o aluno para a lixeira. As avaliações/fotos ficam
+      // preservadas e tudo pode ser restaurado depois.
       const { error } = await client
         .from('alunos')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('personal_trainer_id', user.id)
+        .is('deleted_at', null);
+
+      if (error) throw error;
+      return jsonResponse({ success: true });
+    }
+
+    if (req.method === 'PATCH') {
+      // Restaurar aluno da lixeira
+      const { error } = await client
+        .from('alunos')
+        .update({ deleted_at: null })
         .eq('id', id)
         .eq('personal_trainer_id', user.id);
 

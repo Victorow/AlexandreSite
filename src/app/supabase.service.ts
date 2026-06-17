@@ -25,7 +25,7 @@ export class SupabaseService {
     return this.client.auth.signOut();
   }
 
-  async callFunction<T>(name: string, body?: unknown, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'POST'): Promise<T> {
+  async callFunction<T>(name: string, body?: unknown, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'POST'): Promise<T> {
     const { data: { session } } = await this.client.auth.getSession();
     if (!session) throw new Error('Não autenticado');
 

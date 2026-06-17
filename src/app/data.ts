@@ -22,6 +22,14 @@ export interface StudentSummary {
   last_visceral_level: number | null;
 }
 
+export interface TrashedStudent {
+  id: string;
+  name: string;
+  goal: string | null;
+  gender: 'MALE' | 'FEMALE';
+  deleted_at: string;
+}
+
 export interface Anamnesis {
   cardiac_condition: boolean;
   joint_pain: boolean;
@@ -97,6 +105,7 @@ export interface Assessment {
   bioimpedancias: Bioimpedance;
   dobras_cutaneas: Skinfolds;
   circunferencias: Circumferences;
+  deleted_at?: string | null;
 }
 
 export type PhotoCategory = 'FRENTE' | 'LADO_DIREITO' | 'LADO_ESQUERDO' | 'COSTAS' | 'PERFIL';
@@ -121,6 +130,7 @@ export interface Student {
   created_at: string;
   anamneses: Anamnesis | null;
   avaliacoes: Assessment[];
+  avaliacoes_trash?: Assessment[];
   fotos: Photo[];
 }
 
@@ -196,6 +206,14 @@ export class DataService {
     return from(this.supa.callFunction<{ success: boolean }>(`aluno-detail/${id}`, undefined, 'DELETE'));
   }
 
+  restoreStudent(id: string): Observable<{ success: boolean }> {
+    return from(this.supa.callFunction<{ success: boolean }>(`aluno-detail/${id}`, undefined, 'PATCH'));
+  }
+
+  getTrashedStudents(): Observable<TrashedStudent[]> {
+    return from(this.supa.callFunctionGet<TrashedStudent[]>('alunos', { trash: '1' }));
+  }
+
   addAssessment(payload: CreateAssessmentPayload): Observable<Assessment> {
     return from(this.supa.callFunction<Assessment>('avaliacoes', payload, 'POST'));
   }
@@ -206,6 +224,10 @@ export class DataService {
 
   deleteAssessment(avaliacaoId: string): Observable<{ success: boolean }> {
     return from(this.supa.callFunction<{ success: boolean }>(`avaliacao-detail/${avaliacaoId}`, undefined, 'DELETE'));
+  }
+
+  restoreAssessment(avaliacaoId: string): Observable<{ success: boolean }> {
+    return from(this.supa.callFunction<{ success: boolean }>(`avaliacao-detail/${avaliacaoId}`, undefined, 'PATCH'));
   }
 
   addPhoto(payload: {

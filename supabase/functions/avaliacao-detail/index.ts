@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
         `)
         .eq('id', avaliacaoId)
         .eq('alunos.personal_trainer_id', user.id)
+        .is('deleted_at', null)
         .single();
 
       if (error) return errorResponse('Avaliação não encontrada', 404);
@@ -41,7 +42,32 @@ Deno.serve(async (req) => {
 
       if (checkErr || !av) return errorResponse('Avaliação não encontrada ou sem permissão', 403);
 
-      const { error } = await client.from('avaliacoes').delete().eq('id', avaliacaoId);
+      // Soft-delete: marca a data em vez de apagar fisicamente. O registro sai
+      // das telas mas continua no banco e pode ser restaurado pela lixeira.
+      const { error } = await client
+        .from('avaliacoes')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', avaliacaoId)
+        .is('deleted_at', null);
+      if (error) throw error;
+      return jsonResponse({ success: true });
+    }
+
+    if (req.method === 'PATCH') {
+      // Restaurar da lixeira
+      const { data: av, error: checkErr } = await client
+        .from('avaliacoes')
+        .select('id, alunos!inner(personal_trainer_id)')
+        .eq('id', avaliacaoId)
+        .eq('alunos.personal_trainer_id', user.id)
+        .single();
+
+      if (checkErr || !av) return errorResponse('Avaliação não encontrada ou sem permissão', 403);
+
+      const { error } = await client
+        .from('avaliacoes')
+        .update({ deleted_at: null })
+        .eq('id', avaliacaoId);
       if (error) throw error;
       return jsonResponse({ success: true });
     }

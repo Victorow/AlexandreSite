@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, OnDestroy, signal } from '@angular/core';
 import { RouterOutlet, Router, NavigationEnd, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,7 +16,7 @@ import { DialogService } from './dialog.service';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private router = inject(Router);
   private supa = inject(SupabaseService);
   private dialog = inject(DialogService);
@@ -26,8 +26,21 @@ export class App implements OnInit {
   trainerName = signal('Personal Trainer');
   trainerInitials = signal('PT');
 
+  private authSub?: { data: { subscription: { unsubscribe: () => void } } };
+
   ngOnInit() {
     this.checkAuthentication(this.router.url);
+
+    // Redireciona para o login assim que a sessão Supabase cair (logout,
+    // expiração ou falha no refresh do token) — sem depender de navegação.
+    // Sem isso, o token expirado deixava a tela "vazia" em vez de pedir login.
+    this.authSub = this.supa.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (!session && event !== 'INITIAL_SESSION')) {
+        if (!this.router.url.includes('/login')) {
+          this.router.navigate(['/login']);
+        }
+      }
+    });
 
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
@@ -59,6 +72,10 @@ export class App implements OnInit {
     } else if (isLogin && getTrainerToken()) {
       this.router.navigate(['/']);
     }
+  }
+
+  ngOnDestroy() {
+    this.authSub?.data.subscription.unsubscribe();
   }
 
   async handleLogout() {

@@ -12,6 +12,18 @@ Deno.serve(async (req) => {
       const url = new URL(req.url);
       const search = url.searchParams.get('search') ?? '';
 
+      // Lixeira: alunos soft-deletados (lidos da tabela, pois a view os oculta)
+      if (url.searchParams.get('trash') === '1') {
+        const { data, error } = await client
+          .from('alunos')
+          .select('id, name, goal, gender, deleted_at')
+          .eq('personal_trainer_id', user.id)
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false });
+        if (error) throw error;
+        return jsonResponse(data ?? []);
+      }
+
       let query = client
         .from('aluno_summary')
         .select('*')
