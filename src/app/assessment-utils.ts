@@ -22,7 +22,6 @@ export const FIELD_RANGES: Record<string, FieldRange> = {
   bodyAge: { min: 10, max: 100 },
   visceralFatLevel: { min: 1, max: 30 },
   waterPercentage: { min: 0, max: 100 },
-  perfilBioimpedancia: { min: 1, max: 4 },
 };
 
 /** Texto de ajuda com a faixa permitida de um campo (para o modal de validação). */

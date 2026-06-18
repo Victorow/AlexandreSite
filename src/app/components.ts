@@ -1370,11 +1370,6 @@ export class StudentProfileComponent implements OnInit {
                   <input type="number" step="0.1" inputMode="decimal" formControlName="waterPercentage"
                     class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" placeholder="Ex: 56.0" />
                 </div>
-                <div class="space-y-1">
-                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Perfil Omron (1–4) <span class="text-slate-600">(opcional)</span></label>
-                  <input type="number" min="1" max="4" inputMode="decimal" formControlName="perfilBioimpedancia"
-                    class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" placeholder="1, 2, 3 ou 4" />
-                </div>
               </div>
               <div class="flex items-center gap-3 pt-2">
                 <input type="checkbox" formControlName="isAthlete" id="isAthlete"
@@ -1429,6 +1424,10 @@ export class StudentProfileComponent implements OnInit {
               <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider pt-4 border-t border-white/5 flex items-center gap-1">
                 <mat-icon class="!text-xs h-3">sync_alt</mat-icon> Mapeamento de Simetria (Braços, Coxas e Panturrilhas)
               </h4>
+              <p class="text-[11px] text-slate-400 -mt-1">
+                Preencha pelo menos <strong class="text-slate-300">um lado completo</strong> (o lado predominante).
+                O outro lado pode ficar em branco — mas, se começar a preencher um lado, conclua todos os campos dele.
+              </p>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Lado Direito -->
                 <div class="p-4 bg-white/[0.01] border border-white/5 rounded-2xl space-y-3">
@@ -1675,7 +1674,7 @@ export class NewAssessmentComponent implements OnInit {
     { key: 'bioimpedance', stepName: 'Passo 1 — Balança', fields: {
       weightKg: 'Peso (kg)', bodyFatPercentage: '% Gordura', skeletalMusclePercentage: '% Músculo Esquelético',
       restingMetabolismKcal: 'Metabolismo Basal (kcal)', bodyAge: 'Idade Corporal', visceralFatLevel: 'Gordura Visceral',
-      waterPercentage: '% Água Corporal', perfilBioimpedancia: 'Perfil (Bioimpedância)',
+      waterPercentage: '% Água Corporal',
     } },
     { key: 'circumferences', stepName: 'Passo 2 — Circunferências', fields: {
       neckCm: 'Pescoço', shoulderCm: 'Ombro', chestCm: 'Tórax', waistCm: 'Cintura', abdomenCm: 'Abdômen', hipCm: 'Quadril',
@@ -1720,7 +1719,6 @@ export class NewAssessmentComponent implements OnInit {
   assessmentForm: FormGroup = this.fb.group({
     date: [new Date().toISOString().substring(0, 10), [Validators.required]],
     bioimpedance: this.fb.group({
-      perfilBioimpedancia: ['', [Validators.min(1), Validators.max(4)]],  // Omron: perfil 1-4
       isAthlete: [false],                 // Omron: modo atleta
       weightKg: ['', [Validators.required, Validators.min(1)]],
       bmi: [''],                          // opcional — API calcula automaticamente
@@ -1738,16 +1736,18 @@ export class NewAssessmentComponent implements OnInit {
       waistCm: ['', [Validators.required, Validators.min(0.1)]],
       abdomenCm: ['', [Validators.required, Validators.min(0.1)]],
       hipCm: ['', [Validators.required, Validators.min(0.1)]],
-      rightArmRelaxedCm: ['', [Validators.required, Validators.min(0.1)]],
-      leftArmRelaxedCm: ['', [Validators.required, Validators.min(0.1)]],
-      rightArmFlexedCm: ['', [Validators.required, Validators.min(0.1)]],
-      leftArmFlexedCm: ['', [Validators.required, Validators.min(0.1)]],
-      rightForearmCm: ['', [Validators.min(0.1)]],   // Antebraço D (opcional)
-      leftForearmCm: ['', [Validators.min(0.1)]],    // Antebraço E (opcional)
-      rightThighProximalCm: ['', [Validators.required, Validators.min(0.1)]],
-      leftThighProximalCm: ['', [Validators.required, Validators.min(0.1)]],
-      rightCalfCm: ['', [Validators.required, Validators.min(0.1)]],
-      leftCalfCm: ['', [Validators.required, Validators.min(0.1)]]
+      // Membros bilaterais: required é aplicado dinamicamente por lado
+      // (ver updateSymmetryValidators). O personal mede só o lado predominante.
+      rightArmRelaxedCm: ['', [Validators.min(0.1)]],
+      leftArmRelaxedCm: ['', [Validators.min(0.1)]],
+      rightArmFlexedCm: ['', [Validators.min(0.1)]],
+      leftArmFlexedCm: ['', [Validators.min(0.1)]],
+      rightForearmCm: ['', [Validators.min(0.1)]],   // Antebraço D (sempre opcional)
+      leftForearmCm: ['', [Validators.min(0.1)]],    // Antebraço E (sempre opcional)
+      rightThighProximalCm: ['', [Validators.min(0.1)]],
+      leftThighProximalCm: ['', [Validators.min(0.1)]],
+      rightCalfCm: ['', [Validators.min(0.1)]],
+      leftCalfCm: ['', [Validators.min(0.1)]]
     }),
     skinfolds: this.fb.group({
       protocol: ['7_dobras'],            // protocolo de dobras
@@ -1764,6 +1764,11 @@ export class NewAssessmentComponent implements OnInit {
   });
 
   ngOnInit() {
+    // Lado predominante: revalida quais campos de membro são obrigatórios
+    // sempre que o personal digita (ver updateSymmetryValidators).
+    this.circumferencesGroup.valueChanges.subscribe(() => this.updateSymmetryValidators());
+    this.updateSymmetryValidators();
+
     this.route.params.subscribe(p => {
       const editId = p['id_aval'] ?? null;
       this.editAssessmentId.set(editId);
@@ -1780,6 +1785,50 @@ export class NewAssessmentComponent implements OnInit {
     });
   }
 
+  private get circumferencesGroup(): FormGroup {
+    return this.assessmentForm.get('circumferences') as FormGroup;
+  }
+
+  // Campos que definem um "lado completo" (antebraço é sempre opcional).
+  private readonly rightSideFields = ['rightArmRelaxedCm', 'rightArmFlexedCm', 'rightThighProximalCm', 'rightCalfCm'];
+  private readonly leftSideFields = ['leftArmRelaxedCm', 'leftArmFlexedCm', 'leftThighProximalCm', 'leftCalfCm'];
+
+  /**
+   * Regra do lado predominante:
+   * - Se um lado tem qualquer dado, os 4 campos desse lado ficam obrigatórios (não dá pra preencher meio lado).
+   * - Se nenhum lado tem dado, exige o lado direito por padrão (garante ao menos um lado completo).
+   * Assim, o modal de validação existente lista exatamente os campos que faltam.
+   */
+  private updateSymmetryValidators() {
+    const grp = this.circumferencesGroup;
+    if (!grp) return;
+
+    const hasValue = (name: string) => {
+      const v = grp.get(name)?.value;
+      return v !== null && v !== undefined && `${v}`.trim() !== '';
+    };
+    const rightFilled = this.rightSideFields.some(hasValue);
+    const leftFilled = this.leftSideFields.some(hasValue);
+
+    let requireRight = rightFilled;
+    let requireLeft = leftFilled;
+    if (!requireRight && !requireLeft) requireRight = true; // padrão: ao menos um lado completo
+
+    const apply = (names: string[], required: boolean) => {
+      for (const name of names) {
+        const ctrl = grp.get(name);
+        if (!ctrl) continue;
+        const validators = required
+          ? [Validators.required, Validators.min(0.1)]
+          : [Validators.min(0.1)];
+        ctrl.setValidators(validators);
+        ctrl.updateValueAndValidity({ emitEvent: false });
+      }
+    };
+    apply(this.rightSideFields, requireRight);
+    apply(this.leftSideFields, requireLeft);
+  }
+
   private prefillForEdit(std: Student, assessmentId: string) {
     const aval = std.avaliacoes.find(a => a.id === assessmentId);
     if (!aval) {
@@ -1790,7 +1839,6 @@ export class NewAssessmentComponent implements OnInit {
     this.assessmentForm.patchValue({
       date: aval.date,
       bioimpedance: {
-        perfilBioimpedancia: b?.perfil_bioimpedancia ?? '',
         isAthlete: b?.is_athlete ?? false,
         weightKg: b?.weight_kg ?? '',
         bodyFatPercentage: b?.body_fat_percentage ?? '',
@@ -1816,6 +1864,7 @@ export class NewAssessmentComponent implements OnInit {
         abdominalMm: s?.abdominal_mm ?? '', midThighMm: s?.mid_thigh_mm ?? '', calfMm: s?.calf_mm ?? '',
       },
     });
+    this.updateSymmetryValidators();
   }
 
   onSubmit() {
@@ -1839,7 +1888,6 @@ export class NewAssessmentComponent implements OnInit {
       body_age: +v.bioimpedance.bodyAge,
       visceral_fat_level: +v.bioimpedance.visceralFatLevel,
       water_percentage: v.bioimpedance.waterPercentage ? +v.bioimpedance.waterPercentage : undefined,
-      perfil_bioimpedancia: v.bioimpedance.perfilBioimpedancia ? +v.bioimpedance.perfilBioimpedancia : undefined,
       is_athlete: !!v.bioimpedance.isAthlete,
     };
     const circumferences = {
@@ -1849,16 +1897,17 @@ export class NewAssessmentComponent implements OnInit {
       waist_cm: +v.circumferences.waistCm,
       abdomen_cm: +v.circumferences.abdomenCm,
       hip_cm: +v.circumferences.hipCm,
-      right_arm_relaxed_cm: +v.circumferences.rightArmRelaxedCm,
-      left_arm_relaxed_cm: +v.circumferences.leftArmRelaxedCm,
-      right_arm_flexed_cm: +v.circumferences.rightArmFlexedCm,
-      left_arm_flexed_cm: +v.circumferences.leftArmFlexedCm,
+      // Membros bilaterais: lado não medido vai como undefined (→ NULL no banco), nunca 0.
+      right_arm_relaxed_cm: v.circumferences.rightArmRelaxedCm ? +v.circumferences.rightArmRelaxedCm : undefined,
+      left_arm_relaxed_cm: v.circumferences.leftArmRelaxedCm ? +v.circumferences.leftArmRelaxedCm : undefined,
+      right_arm_flexed_cm: v.circumferences.rightArmFlexedCm ? +v.circumferences.rightArmFlexedCm : undefined,
+      left_arm_flexed_cm: v.circumferences.leftArmFlexedCm ? +v.circumferences.leftArmFlexedCm : undefined,
       right_forearm_cm: v.circumferences.rightForearmCm ? +v.circumferences.rightForearmCm : undefined,
       left_forearm_cm: v.circumferences.leftForearmCm ? +v.circumferences.leftForearmCm : undefined,
-      right_thigh_proximal_cm: +v.circumferences.rightThighProximalCm,
-      left_thigh_proximal_cm: +v.circumferences.leftThighProximalCm,
-      right_calf_cm: +v.circumferences.rightCalfCm,
-      left_calf_cm: +v.circumferences.leftCalfCm,
+      right_thigh_proximal_cm: v.circumferences.rightThighProximalCm ? +v.circumferences.rightThighProximalCm : undefined,
+      left_thigh_proximal_cm: v.circumferences.leftThighProximalCm ? +v.circumferences.leftThighProximalCm : undefined,
+      right_calf_cm: v.circumferences.rightCalfCm ? +v.circumferences.rightCalfCm : undefined,
+      left_calf_cm: v.circumferences.leftCalfCm ? +v.circumferences.leftCalfCm : undefined,
     };
     const skinfolds = {
       protocol: v.skinfolds.protocol ?? '7_dobras',

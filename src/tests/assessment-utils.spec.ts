@@ -61,10 +61,6 @@ describe('fieldRangeHint', () => {
     expect(fieldRangeHint('visceralFatLevel')).toBe('Entre 1 e 30');
   });
 
-  it('perfil de bioimpedância mostra a faixa 1 a 4', () => {
-    expect(fieldRangeHint('perfilBioimpedancia')).toBe('Entre 1 e 4');
-  });
-
   it('campo desconhecido tem fallback genérico', () => {
     expect(fieldRangeHint('campoQualquer')).toBe('Obrigatório, maior que zero');
   });

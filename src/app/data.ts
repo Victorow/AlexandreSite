@@ -46,16 +46,17 @@ export interface Circumferences {
   waist_cm: number;
   abdomen_cm: number;
   hip_cm: number;
-  right_arm_relaxed_cm: number;
-  left_arm_relaxed_cm: number;
-  right_arm_flexed_cm: number;
-  left_arm_flexed_cm: number;
+  // Membros bilaterais opcionais: o personal pode medir só o lado predominante.
+  right_arm_relaxed_cm?: number;
+  left_arm_relaxed_cm?: number;
+  right_arm_flexed_cm?: number;
+  left_arm_flexed_cm?: number;
   right_forearm_cm?: number;
   left_forearm_cm?: number;
-  right_thigh_proximal_cm: number;
-  left_thigh_proximal_cm: number;
-  right_calf_cm: number;
-  left_calf_cm: number;
+  right_thigh_proximal_cm?: number;
+  left_thigh_proximal_cm?: number;
+  right_calf_cm?: number;
+  left_calf_cm?: number;
   rcq?: number;
 }
 

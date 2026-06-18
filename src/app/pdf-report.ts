@@ -574,7 +574,6 @@ export function generateAssessmentPDF(data: AssessmentPdfData): jsPDF {
     { label: '% Água Corporal', cur: pdfFormatNumber(bio?.water_percentage), prevVal: pdfFormatNumber(pbio?.water_percentage), delta: pdfDelta(bio?.water_percentage, pbio?.water_percentage) },
     { label: 'Massa Gorda (kg)', cur: pdfFormatNumber(a.fat_mass_kg), prevVal: pdfFormatNumber(prev?.fat_mass_kg), delta: pdfDelta(a.fat_mass_kg, prev?.fat_mass_kg) },
     { label: 'Massa Magra (kg)', cur: pdfFormatNumber(a.lean_mass_kg), prevVal: pdfFormatNumber(prev?.lean_mass_kg), delta: pdfDelta(a.lean_mass_kg, prev?.lean_mass_kg) },
-    { label: 'Perfil (Bioimpedância)', cur: pdfFormatNumber(bio?.perfil_bioimpedancia, 0), prevVal: pdfFormatNumber(pbio?.perfil_bioimpedancia, 0) },
     { label: 'Modo Atleta', cur: pdfBoolLabel(bio?.is_athlete), prevVal: pdfBoolLabel(pbio?.is_athlete) },
   ], true);
 
