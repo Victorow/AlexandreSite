@@ -2300,6 +2300,40 @@ export class NewAssessmentComponent implements OnInit {
               </div>
             </div>
 
+            <!-- Observações do Relatório -->
+            <div class="bg-[#141417] p-6 rounded-2xl border border-white/5 space-y-3 no-print-section">
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                  <mat-icon class="text-blue-500 !text-base">edit_note</mat-icon>
+                  Observações do Relatório
+                </h3>
+                <span class="text-[10px] text-slate-500">Aparece no PDF exportado</span>
+              </div>
+              <textarea
+                [value]="observacoes()"
+                (input)="onObsInput($event)"
+                rows="4"
+                placeholder="Escreva orientações, evolução, recomendações ou qualquer observação para este aluno. Será incluída no PDF."
+                class="w-full bg-[#0E0E11] border border-white/10 rounded-xl p-3 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/60 resize-y"
+              ></textarea>
+              <div class="flex items-center justify-end gap-3">
+                @if (obsSaved()) {
+                  <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                    <mat-icon class="!text-sm h-4">check_circle</mat-icon>
+                    Observações salvas
+                  </span>
+                }
+                <button
+                  (click)="saveObservacoes()"
+                  [disabled]="isSavingObs()"
+                  class="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-650 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all"
+                >
+                  <mat-icon class="!text-sm">{{ isSavingObs() ? 'hourglass_bottom' : 'save' }}</mat-icon>
+                  {{ isSavingObs() ? 'Salvando...' : 'Salvar Observações' }}
+                </button>
+              </div>
+            </div>
+
             <!-- Back to profile link -->
             <div class="flex justify-start pt-2 no-print-section">
               <a [routerLink]="['/alunos', std.id]" class="text-xs text-blue-500 hover:text-blue-400 font-bold flex items-center gap-1">
@@ -2324,6 +2358,9 @@ export class AssessmentReportComponent implements OnInit {
   previousAssessment = signal<Assessment | null>(null);
   isLoading = signal(true);
   isGeneratingPdf = signal(false);
+  observacoes = signal('');
+  isSavingObs = signal(false);
+  obsSaved = signal(false);
 
   weightDelta = computed(() => {
     const cur = this.assessment();
@@ -2352,7 +2389,9 @@ export class AssessmentReportComponent implements OnInit {
         // avaliacoes are sorted DESC (newest first), so "previous" = index + 1
         const currentIndex = std.avaliacoes.findIndex(a => a.id === assessmentId);
         if (currentIndex !== -1) {
-          this.assessment.set(std.avaliacoes[currentIndex]);
+          const cur = std.avaliacoes[currentIndex];
+          this.assessment.set(cur);
+          this.observacoes.set(cur.observacoes ?? '');
           const older = std.avaliacoes[currentIndex + 1] ?? null;
           this.previousAssessment.set(older);
         }
@@ -2440,6 +2479,33 @@ export class AssessmentReportComponent implements OnInit {
     }
   }
 
+  onObsInput(event: Event) {
+    this.observacoes.set((event.target as HTMLTextAreaElement).value);
+    this.obsSaved.set(false);
+  }
+
+  saveObservacoes() {
+    const aval = this.assessment();
+    if (!aval) return;
+    this.isSavingObs.set(true);
+    this.dataService.updateObservacoes(aval.id, this.observacoes()).subscribe({
+      next: (saved) => {
+        // Reflete o valor salvo (normalizado pelo backend) no estado local
+        const texto = saved?.observacoes ?? '';
+        this.observacoes.set(texto);
+        this.assessment.set({ ...aval, observacoes: texto });
+        this.isSavingObs.set(false);
+        this.obsSaved.set(true);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('[saveObservacoes]', err);
+        this.isSavingObs.set(false);
+        this.dialog.alert({ title: 'Erro ao salvar', message: err instanceof Error ? err.message : 'Tente novamente.', tone: 'error' });
+      },
+    });
+  }
+
   async exportPDF(studentName: string) {
     const std = this.student();
     const aval = this.assessment();
@@ -2478,6 +2544,7 @@ export class AssessmentReportComponent implements OnInit {
         trainerName: getTrainerName(),
         generatedAt: new Date(),
         photos,
+        observacoes: this.observacoes(),
       });
       const safeName = studentName.replace(/\s+/g, '_').replace(/[^\w-]/g, '');
       doc.save(`Avaliacao_Fisica_${safeName}_${aval.date}.pdf`);

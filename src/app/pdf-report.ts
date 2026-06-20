@@ -117,6 +117,7 @@ export interface AssessmentPdfData {
   trainerName: string;
   generatedAt: Date;
   photos?: PdfPhoto[];
+  observacoes?: string | null;
 }
 
 // Paleta (documento claro, profissional)
@@ -640,6 +641,26 @@ export function generateAssessmentPDF(data: AssessmentPdfData): jsPDF {
     { label: 'Medicações em uso', cur: an ? pdfText(an.active_medications) : '—' },
     { label: 'Observações', cur: an ? pdfText(an.notes) : '—' },
   ], false);
+
+  // ======================= OBSERVAÇÕES DO RELATÓRIO =======================
+  const obs = (data.observacoes ?? '').trim();
+  if (obs) {
+    sectionTitle('Observações');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    setText(C.ink);
+    const obsLineH = 5;
+    // Preserva parágrafos do usuário e quebra cada um pela largura útil da página.
+    for (const para of obs.split(/\r?\n/)) {
+      if (para.trim() === '') { y += obsLineH; continue; }
+      for (const ln of doc.splitTextToSize(para, CONTENT_W - 2) as string[]) {
+        ensure(obsLineH);
+        doc.text(ln, M + 1, y + 3.5);
+        y += obsLineH;
+      }
+    }
+    y += 6;
+  }
 
   // ======================= EVOLUÇÃO VISUAL (FOTOS) =======================
   const photos = data.photos ?? [];

@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
           avaliacoes(
             id, date, bmi, bmi_classification, body_fat_percentage, fat_mass_kg,
             lean_mass_kg, body_fat_classification, visceral_risk,
-            skinfolds_fat_percentage, skinfolds_sum_mm, rcq,
+            skinfolds_fat_percentage, skinfolds_sum_mm, rcq, observacoes,
             bioimpedancias(*),
             dobras_cutaneas(*),
             circunferencias(*)

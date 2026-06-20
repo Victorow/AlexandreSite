@@ -106,6 +106,7 @@ export interface Assessment {
   bioimpedancias: Bioimpedance;
   dobras_cutaneas: Skinfolds;
   circunferencias: Circumferences;
+  observacoes?: string | null;
   deleted_at?: string | null;
 }
 
@@ -221,6 +222,10 @@ export class DataService {
 
   updateAssessment(payload: UpdateAssessmentPayload): Observable<Assessment> {
     return from(this.supa.callFunction<Assessment>('avaliacoes', payload, 'PUT'));
+  }
+
+  updateObservacoes(avaliacaoId: string, observacoes: string): Observable<Assessment> {
+    return from(this.supa.callFunction<Assessment>('avaliacoes', { avaliacao_id: avaliacaoId, observacoes }, 'PATCH'));
   }
 
   deleteAssessment(avaliacaoId: string): Observable<{ success: boolean }> {

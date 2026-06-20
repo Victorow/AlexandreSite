@@ -167,6 +167,35 @@ Deno.serve(async (req) => {
       return jsonResponse(saved ?? { id: updatedId });
     }
 
+    // ---- OBSERVAÇÕES DO RELATÓRIO (atualização leve) ----
+    if (req.method === 'PATCH') {
+      const { avaliacao_id, observacoes } = body;
+      if (!avaliacao_id) return errorResponse('Campo obrigatório: avaliacao_id');
+
+      // Valida posse via join com alunos (RLS) antes de atualizar
+      const { data: aval, error: avErr } = await client
+        .from('avaliacoes')
+        .select('id, alunos!inner(personal_trainer_id)')
+        .eq('id', avaliacao_id)
+        .is('deleted_at', null)
+        .single();
+      // deno-lint-ignore no-explicit-any
+      const dono: any = (aval as any)?.alunos;
+      if (avErr || !aval || !dono || dono.personal_trainer_id !== user.id) {
+        return errorResponse('Avaliação não encontrada ou sem permissão', 403);
+      }
+
+      const texto = typeof observacoes === 'string' ? observacoes.trim() : '';
+      const { data: saved, error } = await client
+        .from('avaliacoes')
+        .update({ observacoes: texto.length ? texto : null })
+        .eq('id', avaliacao_id)
+        .select('*')
+        .single();
+      if (error) return errorResponse(friendlyError(error.message), 400);
+      return jsonResponse(saved);
+    }
+
     return errorResponse('Method not allowed', 405);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Internal error';
