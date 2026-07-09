@@ -1418,6 +1418,12 @@ export class StudentProfileComponent implements OnInit {
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Quadril (Glúteos)</label>
                   <input type="number" step="0.1" inputMode="decimal" formControlName="hipCm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
                 </div>
+                @if (student()?.gender === 'FEMALE') {
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Busto/Mamas <span class="text-slate-600">(opc.)</span></label>
+                    <input type="number" step="0.1" inputMode="decimal" formControlName="bustCm" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" placeholder="Ex: 92.0" />
+                  </div>
+                }
               </div>
 
               <!-- Lados Direito e Esquerdo Flexed/Relaxed -->
@@ -1752,6 +1758,7 @@ export class NewAssessmentComponent implements OnInit {
       waistCm: ['', [Validators.required, Validators.min(0.1)]],
       abdomenCm: ['', [Validators.required, Validators.min(0.1)]],
       hipCm: ['', [Validators.required, Validators.min(0.1)]],
+      bustCm: ['', [Validators.min(0.1)]],   // Busto/mamas — só relevante para mulher, sempre opcional
       // Membros bilaterais: required é aplicado dinamicamente por lado
       // (ver updateSymmetryValidators). O personal mede só o lado predominante.
       rightArmRelaxedCm: ['', [Validators.min(0.1)]],
@@ -1870,7 +1877,7 @@ export class NewAssessmentComponent implements OnInit {
       },
       circumferences: {
         neckCm: c?.neck_cm ?? '', shoulderCm: c?.shoulder_cm ?? '', chestCm: c?.chest_cm ?? '',
-        waistCm: c?.waist_cm ?? '', abdomenCm: c?.abdomen_cm ?? '', hipCm: c?.hip_cm ?? '',
+        waistCm: c?.waist_cm ?? '', abdomenCm: c?.abdomen_cm ?? '', hipCm: c?.hip_cm ?? '', bustCm: c?.bust_cm ?? '',
         rightArmRelaxedCm: c?.right_arm_relaxed_cm ?? '', leftArmRelaxedCm: c?.left_arm_relaxed_cm ?? '',
         rightArmFlexedCm: c?.right_arm_flexed_cm ?? '', leftArmFlexedCm: c?.left_arm_flexed_cm ?? '',
         rightForearmCm: c?.right_forearm_cm ?? '', leftForearmCm: c?.left_forearm_cm ?? '',
@@ -1919,6 +1926,7 @@ export class NewAssessmentComponent implements OnInit {
       waist_cm: +v.circumferences.waistCm,
       abdomen_cm: +v.circumferences.abdomenCm,
       hip_cm: +v.circumferences.hipCm,
+      bust_cm: toOptionalNumber(v.circumferences.bustCm),
       // Membros bilaterais: lado não medido vai como undefined (→ NULL no banco), nunca 0.
       right_arm_relaxed_cm: v.circumferences.rightArmRelaxedCm ? +v.circumferences.rightArmRelaxedCm : undefined,
       left_arm_relaxed_cm: v.circumferences.leftArmRelaxedCm ? +v.circumferences.leftArmRelaxedCm : undefined,
