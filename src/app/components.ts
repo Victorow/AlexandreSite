@@ -9,7 +9,7 @@ import { extractBase64FromDataUrl } from './lgpd-utils';
 import { generateAssessmentPDF, PdfPhoto } from './pdf-report';
 import { ToastService } from './toast.service';
 import { DialogService } from './dialog.service';
-import { shouldConvertCmToMm, cmToMm, fieldRangeHint, toOptionalNumber } from './assessment-utils';
+import { shouldConvertCmToMm, cmToMm, fieldRangeHint, toOptionalNumber, toOptionalBoolean } from './assessment-utils';
 
 // ==========================================
 // PHOTO CATEGORY LABEL
@@ -1379,6 +1379,32 @@ export class StudentProfileComponent implements OnInit {
                 </label>
               </div>
             </div>
+
+            @if (student()?.gender === 'FEMALE') {
+              <div class="bg-[#141417] p-6 rounded-2xl border border-white/5 space-y-4 animate-fade-in mt-6">
+                <div class="border-b border-white/5 pb-3">
+                  <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <mat-icon class="text-pink-400">favorite</mat-icon>
+                    Saúde Feminina
+                  </h3>
+                  <p class="text-[11px] text-slate-400 mt-1">Campos opcionais, específicos desta avaliação.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data da Última Menstruação <span class="text-slate-600">(opc.)</span></label>
+                    <input type="date" formControlName="lastMenstruationDate" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white" />
+                  </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ciclo Regular <span class="text-slate-600">(opc.)</span></label>
+                    <select formControlName="menstrualCycleRegular" class="w-full px-4 py-2.5 bg-[#1C1C21] border border-white/5 rounded-xl text-xs text-white">
+                      <option value="">Não informado</option>
+                      <option value="true">Sim, regular</option>
+                      <option value="false">Não, irregular</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            }
           }
 
           <!-- PASSO 2: PERÍMETROS (CIRCUNFERÊNCIAS) -->
@@ -1740,6 +1766,8 @@ export class NewAssessmentComponent implements OnInit {
   // Formulário completo
   assessmentForm: FormGroup = this.fb.group({
     date: [new Date().toISOString().substring(0, 10), [Validators.required]],
+    lastMenstruationDate: [''],       // Saúde feminina — opcional, só exibido para mulher
+    menstrualCycleRegular: [''],      // '' | 'true' | 'false' — opcional, só exibido para mulher
     bioimpedance: this.fb.group({
       isAthlete: [false],                 // Omron: modo atleta
       weightKg: ['', [Validators.required, Validators.min(1)]],
@@ -1865,6 +1893,8 @@ export class NewAssessmentComponent implements OnInit {
     const b = aval.bioimpedancias, c = aval.circunferencias, s = aval.dobras_cutaneas;
     this.assessmentForm.patchValue({
       date: aval.date,
+      lastMenstruationDate: aval.last_menstruation_date ?? '',
+      menstrualCycleRegular: aval.menstrual_cycle_regular === true ? 'true' : aval.menstrual_cycle_regular === false ? 'false' : '',
       bioimpedance: {
         isAthlete: b?.is_athlete ?? false,
         weightKg: b?.weight_kg ?? '',
@@ -1909,6 +1939,8 @@ export class NewAssessmentComponent implements OnInit {
 
     this.isSubmitting.set(true);
     const v = this.assessmentForm.value;
+    const lastMenstruationDate = v.lastMenstruationDate || null;
+    const menstrualCycleRegular = toOptionalBoolean(v.menstrualCycleRegular) ?? null;
     const bioimpedance = {
       weight_kg: +v.bioimpedance.weightKg,
       body_fat_percentage: +v.bioimpedance.bodyFatPercentage,
@@ -1958,8 +1990,8 @@ export class NewAssessmentComponent implements OnInit {
 
     const editId = this.editAssessmentId();
     const request$ = editId
-      ? this.dataService.updateAssessment({ avaliacao_id: editId, date: v.date, bioimpedance, circumferences, skinfolds })
-      : this.dataService.addAssessment({ aluno_id: std.id, date: v.date, bioimpedance, circumferences, skinfolds });
+      ? this.dataService.updateAssessment({ avaliacao_id: editId, date: v.date, last_menstruation_date: lastMenstruationDate, menstrual_cycle_regular: menstrualCycleRegular, bioimpedance, circumferences, skinfolds })
+      : this.dataService.addAssessment({ aluno_id: std.id, date: v.date, last_menstruation_date: lastMenstruationDate, menstrual_cycle_regular: menstrualCycleRegular, bioimpedance, circumferences, skinfolds });
 
     request$.subscribe({
       next: () => {
