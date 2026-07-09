@@ -4,6 +4,8 @@ import {
   cmToMm,
   fieldRangeHint,
   FIELD_RANGES,
+  toOptionalNumber,
+  toOptionalBoolean,
 } from '../app/assessment-utils';
 
 // =============================================
@@ -80,5 +82,39 @@ describe('FIELD_RANGES', () => {
 
   it('gordura visceral: 1 a 30', () => {
     expect(FIELD_RANGES['visceralFatLevel']).toEqual({ min: 1, max: 30 });
+  });
+});
+
+// =============================================
+// toOptionalNumber
+// =============================================
+describe('toOptionalNumber', () => {
+  it('string numérica não vazia retorna number', () => {
+    expect(toOptionalNumber('48.5')).toBe(48.5);
+    expect(toOptionalNumber(48.5)).toBe(48.5);
+  });
+
+  it('string vazia, null, undefined e "0" retornam undefined', () => {
+    expect(toOptionalNumber('')).toBeUndefined();
+    expect(toOptionalNumber(null)).toBeUndefined();
+    expect(toOptionalNumber(undefined)).toBeUndefined();
+    expect(toOptionalNumber('0')).toBeUndefined();
+    expect(toOptionalNumber(0)).toBeUndefined();
+  });
+});
+
+// =============================================
+// toOptionalBoolean
+// =============================================
+describe('toOptionalBoolean', () => {
+  it('"true" retorna true, "false" retorna false', () => {
+    expect(toOptionalBoolean('true')).toBe(true);
+    expect(toOptionalBoolean('false')).toBe(false);
+  });
+
+  it('string vazia, null e undefined retornam undefined (não informado)', () => {
+    expect(toOptionalBoolean('')).toBeUndefined();
+    expect(toOptionalBoolean(null)).toBeUndefined();
+    expect(toOptionalBoolean(undefined)).toBeUndefined();
   });
 });

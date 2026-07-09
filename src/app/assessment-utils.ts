@@ -34,3 +34,16 @@ export function fieldRangeHint(key: string): string {
   if (r.max !== undefined) return `Máximo ${r.max}`;
   return 'Obrigatório';
 }
+
+/** Converte valor de campo numérico opcional do form: vazio/0/inválido → undefined (NULL no banco). */
+export function toOptionalNumber(value: string | number | null | undefined): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  const n = +value;
+  return n ? n : undefined;
+}
+
+/** Converte select tri-estado ('', 'true', 'false') em boolean opcional. */
+export function toOptionalBoolean(value: string | null | undefined): boolean | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  return value === 'true';
+}
