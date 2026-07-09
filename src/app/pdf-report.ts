@@ -602,10 +602,23 @@ export function generateAssessmentPDF(data: AssessmentPdfData): jsPDF {
     cRow('Antebraço E.', 'left_forearm_cm'),
     cRow('Coxa D. (proximal)', 'right_thigh_proximal_cm'),
     cRow('Coxa E. (proximal)', 'left_thigh_proximal_cm'),
+    cRow('Coxa D. (medial)', 'right_thigh_medial_cm'),
+    cRow('Coxa E. (medial)', 'left_thigh_medial_cm'),
+    cRow('Coxa D. (distal)', 'right_thigh_distal_cm'),
+    cRow('Coxa E. (distal)', 'left_thigh_distal_cm'),
     cRow('Panturrilha D.', 'right_calf_cm'),
     cRow('Panturrilha E.', 'left_calf_cm'),
+    ...(cir?.bust_cm || pcir?.bust_cm ? [cRow('Busto', 'bust_cm')] : []),
     { label: 'RCQ (Cintura/Quadril)', cur: pdfFormatNumber(a.rcq, 2), prevVal: pdfFormatNumber(prev?.rcq, 2), delta: pdfDelta(a.rcq, prev?.rcq, 2) },
   ], true);
+
+  // ---- Saúde Feminina (só quando há dado preenchido) ----
+  if (student.gender === 'FEMALE' && (a.last_menstruation_date || a.menstrual_cycle_regular !== null && a.menstrual_cycle_regular !== undefined)) {
+    drawTable('Saúde Feminina', [
+      { label: 'Última Menstruação', cur: pdfFormatDate(a.last_menstruation_date), prevVal: pdfFormatDate(prev?.last_menstruation_date) },
+      { label: 'Ciclo Regular', cur: pdfBoolLabel(a.menstrual_cycle_regular), prevVal: pdfBoolLabel(prev?.menstrual_cycle_regular) },
+    ], true);
+  }
 
   // ---- Dobras Cutâneas ----
   const sk = a.dobras_cutaneas;
