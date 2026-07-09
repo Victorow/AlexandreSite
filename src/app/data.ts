@@ -46,6 +46,7 @@ export interface Circumferences {
   waist_cm: number;
   abdomen_cm: number;
   hip_cm: number;
+  bust_cm?: number;
   // Membros bilaterais opcionais: o personal pode medir só o lado predominante.
   right_arm_relaxed_cm?: number;
   left_arm_relaxed_cm?: number;
@@ -55,6 +56,10 @@ export interface Circumferences {
   left_forearm_cm?: number;
   right_thigh_proximal_cm?: number;
   left_thigh_proximal_cm?: number;
+  right_thigh_medial_cm?: number;
+  left_thigh_medial_cm?: number;
+  right_thigh_distal_cm?: number;
+  left_thigh_distal_cm?: number;
   right_calf_cm?: number;
   left_calf_cm?: number;
   rcq?: number;
@@ -103,6 +108,8 @@ export interface Assessment {
   skinfolds_fat_percentage: number;
   skinfolds_sum_mm: number;
   rcq: number;
+  last_menstruation_date?: string | null;
+  menstrual_cycle_regular?: boolean | null;
   bioimpedancias: Bioimpedance;
   dobras_cutaneas: Skinfolds;
   circunferencias: Circumferences;
@@ -162,6 +169,8 @@ export interface CreateStudentPayload {
 export interface CreateAssessmentPayload {
   aluno_id: string;
   date: string;
+  last_menstruation_date?: string | null;
+  menstrual_cycle_regular?: boolean | null;
   bioimpedance: Omit<Bioimpedance, 'bmi' | 'fat_mass_kg' | 'lean_mass_kg'>;
   circumferences: Omit<Circumferences, 'rcq'>;
   skinfolds: Omit<Skinfolds, 'sum_mm' | 'fat_percentage'>;
@@ -170,6 +179,8 @@ export interface CreateAssessmentPayload {
 export interface UpdateAssessmentPayload {
   avaliacao_id: string;
   date?: string;
+  last_menstruation_date?: string | null;
+  menstrual_cycle_regular?: boolean | null;
   bioimpedance: Omit<Bioimpedance, 'bmi' | 'fat_mass_kg' | 'lean_mass_kg'>;
   circumferences: Omit<Circumferences, 'rcq'>;
   skinfolds: Omit<Skinfolds, 'sum_mm' | 'fat_percentage'>;
