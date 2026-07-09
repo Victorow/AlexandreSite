@@ -43,6 +43,8 @@ function buildPayloads(aluno: any, body: any) {
       skinfolds_fat_percentage: skinfoldsFatPct,
       skinfolds_sum_mm: skinfoldsSum,
       rcq,
+      last_menstruation_date: body.last_menstruation_date ?? null,
+      menstrual_cycle_regular: body.menstrual_cycle_regular ?? null,
     },
     p_bio: {
       perfil_bioimpedancia: bioimpedance.perfil_bioimpedancia ?? null,
@@ -87,9 +89,14 @@ function buildPayloads(aluno: any, body: any) {
       left_forearm_cm: circumferences.left_forearm_cm ?? null,
       right_thigh_proximal_cm: circumferences.right_thigh_proximal_cm ?? null,
       left_thigh_proximal_cm: circumferences.left_thigh_proximal_cm ?? null,
+      right_thigh_medial_cm: circumferences.right_thigh_medial_cm ?? null,
+      left_thigh_medial_cm: circumferences.left_thigh_medial_cm ?? null,
+      right_thigh_distal_cm: circumferences.right_thigh_distal_cm ?? null,
+      left_thigh_distal_cm: circumferences.left_thigh_distal_cm ?? null,
       right_calf_cm: circumferences.right_calf_cm ?? null,
       left_calf_cm: circumferences.left_calf_cm ?? null,
       rcq,
+      bust_cm: circumferences.bust_cm ?? null,
     },
   };
 }
