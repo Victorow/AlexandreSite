@@ -9,7 +9,7 @@ import { extractBase64FromDataUrl } from './lgpd-utils';
 import { generateAssessmentPDF, PdfPhoto } from './pdf-report';
 import { ToastService } from './toast.service';
 import { DialogService } from './dialog.service';
-import { shouldConvertCmToMm, cmToMm, fieldRangeHint } from './assessment-utils';
+import { shouldConvertCmToMm, cmToMm, fieldRangeHint, toOptionalNumber } from './assessment-utils';
 
 // ==========================================
 // PHOTO CATEGORY LABEL
@@ -1450,6 +1450,14 @@ export class StudentProfileComponent implements OnInit {
                       <input type="number" step="0.1" inputMode="decimal" formControlName="rightThighProximalCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" />
                     </div>
                     <div class="space-y-1">
+                      <label class="text-[9px] uppercase font-bold text-slate-500">Coxa Medial <span class="text-slate-600">(opc.)</span></label>
+                      <input type="number" step="0.1" inputMode="decimal" formControlName="rightThighMedialCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" placeholder="—" />
+                    </div>
+                    <div class="space-y-1">
+                      <label class="text-[9px] uppercase font-bold text-slate-500">Coxa Distal <span class="text-slate-600">(opc.)</span></label>
+                      <input type="number" step="0.1" inputMode="decimal" formControlName="rightThighDistalCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" placeholder="—" />
+                    </div>
+                    <div class="space-y-1">
                       <label class="text-[9px] uppercase font-bold text-slate-500">Panturrilha</label>
                       <input type="number" step="0.1" inputMode="decimal" formControlName="rightCalfCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" />
                     </div>
@@ -1475,6 +1483,14 @@ export class StudentProfileComponent implements OnInit {
                     <div class="space-y-1">
                       <label class="text-[9px] uppercase font-bold text-slate-500">Coxa Proximal</label>
                       <input type="number" step="0.1" inputMode="decimal" formControlName="leftThighProximalCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" />
+                    </div>
+                    <div class="space-y-1">
+                      <label class="text-[9px] uppercase font-bold text-slate-500">Coxa Medial <span class="text-slate-600">(opc.)</span></label>
+                      <input type="number" step="0.1" inputMode="decimal" formControlName="leftThighMedialCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" placeholder="—" />
+                    </div>
+                    <div class="space-y-1">
+                      <label class="text-[9px] uppercase font-bold text-slate-500">Coxa Distal <span class="text-slate-600">(opc.)</span></label>
+                      <input type="number" step="0.1" inputMode="decimal" formControlName="leftThighDistalCm" class="w-full px-3 py-2 bg-[#1C1C21] border border-white/5 rounded-lg text-xs text-slate-200" placeholder="—" />
                     </div>
                     <div class="space-y-1">
                       <label class="text-[9px] uppercase font-bold text-slate-500">Panturrilha</label>
@@ -1746,6 +1762,10 @@ export class NewAssessmentComponent implements OnInit {
       leftForearmCm: ['', [Validators.min(0.1)]],    // Antebraço E (sempre opcional)
       rightThighProximalCm: ['', [Validators.min(0.1)]],
       leftThighProximalCm: ['', [Validators.min(0.1)]],
+      rightThighMedialCm: ['', [Validators.min(0.1)]],   // Coxa medial D (sempre opcional)
+      leftThighMedialCm: ['', [Validators.min(0.1)]],    // Coxa medial E (sempre opcional)
+      rightThighDistalCm: ['', [Validators.min(0.1)]],   // Coxa distal D (sempre opcional)
+      leftThighDistalCm: ['', [Validators.min(0.1)]],    // Coxa distal E (sempre opcional)
       rightCalfCm: ['', [Validators.min(0.1)]],
       leftCalfCm: ['', [Validators.min(0.1)]]
     }),
@@ -1855,6 +1875,8 @@ export class NewAssessmentComponent implements OnInit {
         rightArmFlexedCm: c?.right_arm_flexed_cm ?? '', leftArmFlexedCm: c?.left_arm_flexed_cm ?? '',
         rightForearmCm: c?.right_forearm_cm ?? '', leftForearmCm: c?.left_forearm_cm ?? '',
         rightThighProximalCm: c?.right_thigh_proximal_cm ?? '', leftThighProximalCm: c?.left_thigh_proximal_cm ?? '',
+        rightThighMedialCm: c?.right_thigh_medial_cm ?? '', leftThighMedialCm: c?.left_thigh_medial_cm ?? '',
+        rightThighDistalCm: c?.right_thigh_distal_cm ?? '', leftThighDistalCm: c?.left_thigh_distal_cm ?? '',
         rightCalfCm: c?.right_calf_cm ?? '', leftCalfCm: c?.left_calf_cm ?? '',
       },
       skinfolds: {
@@ -1906,6 +1928,10 @@ export class NewAssessmentComponent implements OnInit {
       left_forearm_cm: v.circumferences.leftForearmCm ? +v.circumferences.leftForearmCm : undefined,
       right_thigh_proximal_cm: v.circumferences.rightThighProximalCm ? +v.circumferences.rightThighProximalCm : undefined,
       left_thigh_proximal_cm: v.circumferences.leftThighProximalCm ? +v.circumferences.leftThighProximalCm : undefined,
+      right_thigh_medial_cm: toOptionalNumber(v.circumferences.rightThighMedialCm),
+      left_thigh_medial_cm: toOptionalNumber(v.circumferences.leftThighMedialCm),
+      right_thigh_distal_cm: toOptionalNumber(v.circumferences.rightThighDistalCm),
+      left_thigh_distal_cm: toOptionalNumber(v.circumferences.leftThighDistalCm),
       right_calf_cm: v.circumferences.rightCalfCm ? +v.circumferences.rightCalfCm : undefined,
       left_calf_cm: v.circumferences.leftCalfCm ? +v.circumferences.leftCalfCm : undefined,
     };
